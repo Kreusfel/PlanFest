@@ -1,0 +1,5 @@
+# Rien de secret dans ce dépôt (app statique).
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
