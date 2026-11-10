@@ -1548,7 +1548,7 @@
     var q=(expected===0)?supa.from("festivals").insert(payload).select("version")
                         :supa.from("festivals").update(payload).eq("id",f.id).eq("version",expected).select("version");
     q.then(function(r){
-      if(r.error){ setStatus(/duplicate|conflict|already/i.test(r.error.message||"")?"conflict":"err"); return; }
+      if(r.error){ setStatus(/duplicate|conflict|already/i.test(r.error.message||"")?"conflict":"err"); if($("c-msg")) $("c-msg").textContent="Enregistrement refusé : "+(r.error.message||"")+(r.error.hint?(" — "+r.error.hint):"")+(r.error.code?(" ["+r.error.code+"]"):""); try{console.error("PlanFest save",r.error);}catch(e){} return; }
       var d=r.data||[];
       if(expected!==0&&!d.length){ setStatus("conflict"); return; }
       f._v=nv; cloud.dirty=false; try{localStorage.setItem(KEY,JSON.stringify(root));}catch(e){}
@@ -1559,7 +1559,7 @@
   function pullAll(){
     if(!cloudReady()) return; setStatus("sync");
     supa.from("festivals").select("id,nom,data,version").then(function(r){
-      if(r.error){ setStatus("err"); return; }
+      if(r.error){ setStatus("err"); if($("c-msg")) $("c-msg").textContent="Chargement impossible : "+(r.error.message||"")+(r.error.code?(" ["+r.error.code+"]"):""); try{console.error("PlanFest load",r.error);}catch(e){} return; }
       var rows=(r.data||[]).filter(function(x){return valid(x.data);});
       if(!rows.length){ setStatus("empty"); return; }
       root.festivals=rows.map(function(x){return {id:x.id,nom:x.nom||"",data:x.data,_v:x.version};});
@@ -1573,19 +1573,24 @@
     if(!cloudReady()) return; setStatus("sync");
     var rows=root.festivals.map(function(f){return {id:f.id,nom:f.nom||"",data:f.data,version:1,updated_by:cloud.user.id};});
     supa.from("festivals").upsert(rows,{onConflict:"id"}).select("id,version").then(function(r){
-      if(r.error){ setStatus("err"); return; }
+      if(r.error){ setStatus("err"); if($("c-msg")) $("c-msg").textContent="Import impossible : "+(r.error.message||"")+(r.error.hint?(" — "+r.error.hint):"")+(r.error.code?(" ["+r.error.code+"]"):""); try{console.error("PlanFest import",r.error);}catch(e){} return; }
       (r.data||[]).forEach(function(x){ var f=root.festivals.filter(function(k){return k.id===x.id;})[0]; if(f) f._v=x.version; });
       try{localStorage.setItem(KEY,JSON.stringify(root));}catch(e){}
       setStatus("saved"); renderCloudModal();
     },function(){ setStatus("err"); });
   }
   function cloudSignIn(email){ if(!supa) return; supa.auth.signInWithOtp({email:email,options:{emailRedirectTo:location.href.split("#")[0]}}).then(function(r){ $("c-msg").textContent=r.error?("Erreur : "+r.error.message):"Lien envoyé ! Ouvre ton email et clique le lien pour te connecter."; }); }
+  function cloudSignInPw(email,password){ if(!supa) return; $("c-msg").textContent="Connexion…"; supa.auth.signInWithPassword({email:email,password:password}).then(function(r){ if(r.error) $("c-msg").textContent="Connexion refusée : "+(r.error.message||""); }); }
   function cloudSignOut(){ if(!supa) return; supa.auth.signOut().then(function(){ cloud.user=null; setStatus("local"); renderCloudModal(); }); }
   function renderCloudModal(){
     var b=$("c-body"); if(!b) return;
     if(!supa){ b.innerHTML='<p class="muted">La librairie Supabase ne s\'est pas chargée (connexion internet ?). L\'application continue de fonctionner en local.</p>'; return; }
     if(!cloud.user){
-      b.innerHTML='<p class="muted">Connecte-toi pour partager les plans avec les autres organisateurs. Seuls les emails ajoutés dans Supabase peuvent entrer.</p><div class="fld"><label for="c-email">Ton email</label><input id="c-email" type="email" placeholder="prenom@asso.fr"></div><div class="acts"><button class="btn primary" id="c-login" type="button">Recevoir le lien de connexion</button><button class="btn" id="c-close2" type="button">Fermer</button></div>';
+      b.innerHTML='<p class="muted">Connecte-toi pour partager les plans. Seuls les emails ajoutés dans Supabase peuvent entrer.</p>'
+        +'<div class="fld"><label for="c-email">Email</label><input id="c-email" type="email" placeholder="prenom@asso.fr"></div>'
+        +'<div class="fld"><label for="c-pass">Mot de passe</label><input id="c-pass" type="password" placeholder="••••••••"></div>'
+        +'<div class="acts"><button class="btn primary" id="c-pwlogin" type="button">Se connecter</button><button class="btn" id="c-login" type="button">Lien par email</button></div>'
+        +'<div class="acts"><button class="btn" id="c-close2" type="button">Fermer</button></div>';
     } else {
       var ST={saved:"à jour",sync:"synchronisation…",pending:"modifications en attente…",conflict:"conflit : le plan a changé ailleurs",empty:"base vide",err:"erreur réseau",local:"local"};
       b.innerHTML='<p class="muted">Connecté : <b>'+esc(cloud.user.email||"")+'</b> — état : '+esc(ST[cloud.status]||cloud.status)+'</p>'
@@ -1616,7 +1621,8 @@
     $("cloud-btn").onclick=function(){ renderCloudModal(); $("c-msg").textContent=""; $("cmodal").hidden=false; };
     $("cmodal").addEventListener("pointerdown",function(e){ if(e.target===$("cmodal")) $("cmodal").hidden=true; });
     $("cmodal").addEventListener("click",function(e){ var btn=e.target.closest("button"); if(!btn) return;
-      if(btn.id==="c-login"){ var em=($("c-email")||{}).value; if(em) cloudSignIn(em); }
+      if(btn.id==="c-pwlogin"){ var em0=($("c-email")||{}).value, pw0=($("c-pass")||{}).value; if(em0&&pw0) cloudSignInPw(em0,pw0); }
+      else if(btn.id==="c-login"){ var em=($("c-email")||{}).value; if(em) cloudSignIn(em); }
       else if(btn.id==="c-reload"){ pullAll(); }
       else if(btn.id==="c-migrate"){ cloudMigrate(); }
       else if(btn.id==="c-logout"){ cloudSignOut(); }
