@@ -20,7 +20,7 @@ import * as intergeneration from "./ecrans/intergeneration.js";
 import * as competences from "./ecrans/competences.js";
 import * as mesCompetences from "./ecrans/mes-competences.js";
 import * as permanences from "./ecrans/permanences.js";
-import * as monPlanning from "./ecrans/mon-planning.js";
+import * as terrain from "./ecrans/terrain.js";
 import * as accueil from "./ecrans/accueil.js";
 import * as presences from "./ecrans/presences.js";
 import * as bilan from "./ecrans/bilan.js";
@@ -41,7 +41,9 @@ const SCREENS = {
   "/jeux": jeux,
   "/ludotheque": ludotheque,
   "/permanences": permanences,
-  "/mon-planning": monPlanning,
+  "/terrain": terrain,
+  // Ancienne adresse : « Mon planning » est désormais un onglet de « Sur le terrain ».
+  "/mon-planning": { render: (c) => terrain.render(c, "moi"), unmount: terrain.unmount },
   "/mes-competences": mesCompetences,
   "/competences": competences,
   "/benevoles": benevoles,
@@ -76,10 +78,11 @@ const NAV = [
   { group: "Planifier", path: "/repartition", label: "Répartition tables", can: () => true, poles: ["partenaires"] },
   { group: "Planifier", path: "/permanences", label: "Animations", can: () => true, poles: ["animateurs_benevoles"] },
   { group: "Planifier", path: "/repas", label: "Buvette & catering", can: () => true, poles: ["buvette_catering"] },
+  { group: "Jour J", path: "/terrain", label: "Sur le terrain", can: () => true, poles: [] },
   { group: "Jour J", path: "/accueil", label: "Accueil (entrées)", can: () => true, poles: [] },
   { group: "Jour J", path: "/presences", label: "Présences", can: () => isAdmin() || hasPole("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
   { group: "Après", path: "/bilan", label: "Bilan", can: () => isAdmin(), poles: [] },
-  { group: "Mon espace", path: "/mon-planning", label: "Mon planning", can: () => true, poles: [] },
+  { group: "Mon espace", path: "/terrain/moi", label: "Mon planning", can: () => true, poles: [] },
   { group: "Mon espace", path: "/mes-competences", label: "Mes compétences", can: () => true, poles: [] },
   { group: "Réglages", path: "/editions", label: "Éditions", can: () => isAdmin(), poles: [] },
   { group: "Réglages", path: "/admin", label: "Administration", can: () => isAdmin(), poles: [] },
@@ -257,6 +260,11 @@ async function loadEditions() {
 }
 
 async function boot() {
+  // Sur téléphone, l'ouverture de l'app mène à « Sur le terrain » (consultation) plutôt
+  // qu'au tableau de bord, qui reste accessible par le menu.
+  if (/^#?\/?$/.test(location.hash) && window.matchMedia("(max-width: 760px)").matches) {
+    history.replaceState(null, "", location.pathname + location.search + "#/terrain");
+  }
   await refreshSession();
   // Retirer les jetons ou l'erreur du lien e-mail de la barre d'adresse.
   if (lienEmail.type || lienEmail.erreur) history.replaceState(null, "", location.pathname + location.search);

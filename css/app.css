@@ -417,3 +417,34 @@ input[type=color]{padding:3px;height:44px}
 /* Groupe de cases sous un intitulé (remplace un <label> qui en contenait plusieurs). */
 .champ-groupe{display:block;margin:0 0 12px}
 .champ-groupe > .lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
+
+/* ---------- Sur le terrain (consultation téléphone, lecture seule) ---------- */
+.terrain{max-width:640px;margin:0 auto;padding-bottom:84px}
+.t-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.t-head h1{font-size:24px;margin:0}
+.t-jours{margin:4px 0 12px}
+.t-jours .pill-btn,.terrain .salle-tabs .pill-btn{min-height:40px;padding:8px 16px}
+.t-outils{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
+.t-outils input[type=search],.t-outils #t-num{flex:1;min-width:160px;margin:0}
+.t-outils .chk-inline{margin:0}
+.t-heure{font-size:15px;margin:18px 2px 8px;color:var(--muted)}
+.t-list{display:flex;flex-direction:column;gap:10px}
+.t-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.t-card.now{background:var(--ok-bg);border-color:var(--ok)}
+.t-time{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.t-what{font-size:18px;font-weight:700;line-height:1.25}
+.t-where{color:var(--muted);font-size:14px}
+.t-card .btn{margin-top:6px}
+.t-complet{color:var(--alert);font-weight:700}
+.t-plan{padding:8px;overflow:auto}
+.t-detail h3{margin:0}
+.t-ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.t-tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;background:var(--card);border-top:1px solid var(--line);
+  padding:6px max(8px,env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-right))}
+.t-tabs button{flex:1;min-height:48px;border:0;background:none;font:inherit;font-weight:600;font-size:14px;color:var(--muted);border-radius:10px;cursor:pointer}
+.t-tabs button.on{color:#fff;background:var(--primary)}
+@media (min-width:761px){
+  /* Sur ordinateur, la barre d'onglets reste sous le contenu (pas collée au bas de l'écran). */
+  .t-tabs{position:sticky;bottom:0;margin-top:16px;border:1px solid var(--line);border-radius:12px}
+  .terrain{padding-bottom:16px}
+}
