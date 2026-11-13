@@ -222,11 +222,14 @@ function renderShell() {
     location.reload();
   };
   const sel = document.getElementById("ed-select");
-  if (sel) sel.onchange = () => { setEdition(sel.value); renderShell(); };
+  // Changer d'édition recharge la page : un chargement encore en cours sur l'ancienne
+  // édition ne peut plus afficher (ni faire enregistrer) ses données sous la nouvelle.
+  // Le plan envoie ses modifs en attente avant (unmount + beforeunload).
+  if (sel) sel.onchange = () => { setEdition(sel.value); leaveScreen(); location.reload(); };
   leaveScreen();
   currentScreen = SCREENS[path];
   currentScreen.render(document.getElementById("view"), sub);
-  if (!editionsList.length) loadEditions();
+  loadEditions();  // à chaque écran : une édition créée ou renommée apparaît sans recharger
 }
 
 // Liste des éditions pour le sélecteur de la barre latérale.
