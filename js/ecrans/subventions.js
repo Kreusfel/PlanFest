@@ -5,7 +5,6 @@ import { store } from "../store.js";
 import { esc, plur } from "../ui/util.js";
 
 const STATUTS = [["a_faire", "À faire"], ["depose", "Déposé"], ["accorde", "Accordé"], ["refuse", "Refusé"]];
-const STATUT_PILL = { a_faire: "warn", depose: "amber", accorde: "ok", refuse: "grey" };
 
 let root, list = [], loadErr = "";
 let filt = { statut: "" };
@@ -115,23 +114,16 @@ function onClick(e) {
   if (t.closest("#save")) return save();
   if (t.closest("#del")) return remove();
   const r = t.closest("[data-open]");
-  if (r && !t.closest("[data-stop]")) { view = { mode: "fiche", id: r.dataset.open }; return go(); }
+  if (r) { view = { mode: "fiche", id: r.dataset.open }; return go(); }
 }
 function onChange(e) {
   const t = e.target;
   if (t.id === "f-statut" && t.closest(".filters")) { filt.statut = t.value; return go(); }
-  if (t.classList.contains("qs")) return quick(t.dataset.id, t.value);
 }
 function readForm() {
   const g = (f) => root.querySelector(`[data-f="${f}"]`);
   return { financeur: (g("financeur").value || "").trim(), echeance: g("echeance").value || null,
     statut: g("statut").value, lien_pieces: g("lien_pieces").value || null, notes: g("notes").value || null };
-}
-async function quick(id, statut) {
-  const { error } = await supa.from("subventions").update({ statut }).eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
-  const s = list.find((x) => x.id === id); if (s) s.statut = statut;
-  go();
 }
 async function create() {
   const msg = root.querySelector("#s-msg"), v = readForm();

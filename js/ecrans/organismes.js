@@ -10,7 +10,6 @@ const ROLES = [["partenaire", "Partenaire"], ["editeur", "Éditeur"], ["sponsor"
 const STATUTS = [["invite", "À contacter"], ["relance", "À relancer"], ["confirme", "Confirmé"], ["refuse", "Refusé"]];
 // « À relancer » est un état calculé (sur le dernier contact), pas un statut à choisir.
 const STATUTS_SAISIE = STATUTS.filter((s) => s[0] !== "relance");
-const STATUT_PILL = { invite: "warn", relance: "amber", confirme: "ok", refuse: "grey" };
 const PALETTE = ["#a9c6e8", "#f7b2b2", "#bfe3b4", "#f7d8a0", "#c9b7e8", "#a0d8d8", "#f0b8d8", "#d8cba0"];
 const SUB_ROLE = { editeurs: "editeur", partenaires: "partenaire", sponsors: "sponsor" };
 const ROLE_SUB = { editeur: "editeurs", partenaire: "partenaires", sponsor: "sponsors" };
@@ -317,7 +316,7 @@ function onClick(e) {
   if (t.closest("#add-jeu-go")) return addJeu();
   if (t.closest("#f-relance")) { filt.relance = !filt.relance; return go(); }
   const openRow = t.closest("[data-open]");
-  if (openRow && !t.closest("[data-stop]")) { view = { mode: "fiche", id: openRow.dataset.open }; return go(); }
+  if (openRow) { view = { mode: "fiche", id: openRow.dataset.open }; return go(); }
 }
 function onInput(e) {
   if (e.target.id === "f-q") {
@@ -331,7 +330,6 @@ function onInput(e) {
 async function onChange(e) {
   const t = e.target;
   if (t.id === "f-statut") { filt.statut = t.value; return go(); }
-  if (t.classList.contains("statut-sel")) return quickStatut(t.dataset.id, t.value);
   if (t.matches('[data-e="statut"]') && view.mode === "fiche") {
     if (t.value === "relance" || t.value === "confirme") {
       const d = root.querySelector('[data-e="dernier_contact"]');
@@ -347,15 +345,6 @@ function toggleSection() {
   set("couleur", P); set("partenaire", P); set("sponsor", S); set("regime", P); set("editeur-jeux", E);
   const logo = root.querySelector('[data-e="logo_url"]'), badge = root.querySelector(".logo-badge");
   if (badge) badge.style.display = (!(logo && logo.value) && (P || S)) ? "" : "none";
-}
-
-async function quickStatut(id, statut) {
-  const patch = { statut };
-  if (statut === "relance" || statut === "confirme") patch.dernier_contact = today();
-  const { error } = await supa.from("organisme_editions").update(patch).eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
-  const oe = list.find((x) => x.id === id); if (oe) Object.assign(oe, patch);
-  go();
 }
 
 async function addJeu() {

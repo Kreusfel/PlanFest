@@ -5,9 +5,7 @@ import { store } from "../store.js";
 import { esc, plur } from "../ui/util.js";
 
 const STATUTS = [["inscrit", "Inscrit"], ["confirme", "Confirmé"], ["annule", "Annulé"]];
-const STATUT_PILL = { inscrit: "grey", confirme: "ok", annule: "alert" };
 const JOURS = [["ven", "Vendredi"], ["sam", "Samedi"], ["dim", "Dimanche"]];
-const DEMIS = [["matin", "Matin"], ["aprem", "Après-midi"]];
 // Grille de disponibilités : vendredi = mise en place, dimanche soir = rangement.
 const DISPO_ROWS = [
   { jour: "ven", label: "Vendredi", demis: ["matin", "aprem"] },
@@ -189,7 +187,7 @@ function onClick(e) {
   if (t.closest("#effacer")) return effacer();
   if (t.closest("#f-anim")) { filt.anim = !filt.anim; return go(); }
   const r = t.closest("[data-open]");
-  if (r && !t.closest("[data-stop]")) return openFiche(r.dataset.open);
+  if (r) return openFiche(r.dataset.open);
 }
 function onInput(e) {
   if (e.target.id === "f-q") {

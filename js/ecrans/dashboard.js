@@ -28,7 +28,6 @@ const ALERTE_SI_POSITIF = new Set(["a_relancer", "tables_non_attribuees", "edite
   "dossiers_attente", "echeances_30j", "tables_non_verifiees", "alertes", "confirmes_sans_logo"]);
 
 const ROLE_SHORT = { editeur: "Éditeur", partenaire: "Partenaire", sponsor: "Sponsor" };
-const STATUT_LBL = { invite: "à contacter", relance: "à relancer" };
 const STALE_JOURS = 14; // sans contact depuis plus de N jours = en retard
 
 let root;
