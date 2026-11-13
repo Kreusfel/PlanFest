@@ -1,7 +1,7 @@
 // Écran #/admin — Phase 0 (étape C). Admin seulement.
 // Membres & pôles, invitations, import du plan depuis la maquette, export JSON.
 import { supa } from "../supabase.js";
-import { session, isAdmin } from "../auth.js";
+import { session, isAdmin, sendInvitation } from "../auth.js";
 import { store } from "../store.js";
 import { esc, plur } from "../ui/util.js";
 import { exportMontage } from "../export/montage.js";
@@ -112,14 +112,16 @@ function cardInvitations() {
         <span class="muted">${i.role === "admin" ? "Admin" : "Membre"} · pôles : ${esc(noms)}</span>
       </div>
       <div class="actions">
-        <span class="pill ${used ? "grey" : "ok"}">${used ? "Utilisée" : "En attente"}</span>
+        <span class="pill ${used ? "grey" : "ok"}">${used ? "Compte créé" : "En attente"}</span>
+        <button class="btn small" data-act="inv-send" data-id="${i.id}" title="${used ? "Envoie un lien pour (re)choisir son mot de passe" : "Envoie l'e-mail d'invitation"}">${used ? "Renvoyer le lien" : "Envoyer"}</button>
         ${used ? "" : `<button class="btn small danger" data-act="inv-del" data-id="${i.id}">Supprimer</button>`}
       </div>
     </div>`;
   }).join("") || `<p class="muted">Aucune invitation.</p>`;
   const chks = poles.map((p) => `<label><input type="checkbox" data-inv-pole="${p.id}"> ${esc(p.nom)}</label>`).join("");
   return `<div class="card admin-sec"><h2>Invitations</h2>
-    <p class="mini">Pas d'inscription libre : un compte n'est actif que si son e-mail a été invité ici.</p>
+    <p class="mini">Pas d'inscription libre : un compte n'est actif que si son e-mail a été invité ici.
+      La personne reçoit un e-mail avec un lien pour choisir son mot de passe.</p>
     <div class="list">${list}</div>
     <hr>
     <h3>Nouvelle invitation</h3>
@@ -128,7 +130,7 @@ function cardInvitations() {
       <label>Rôle<select id="inv-role"><option value="membre">Membre</option><option value="admin">Admin</option></select></label>
     </div>
     <label>Pôles responsables<div class="poles-pick">${chks}</div></label>
-    <button class="btn primary" id="inv-create">Créer l'invitation</button>
+    <button class="btn primary" id="inv-create">Inviter par e-mail</button>
     <p class="msg" id="inv-msg" aria-live="polite"></p></div>`;
 }
 
@@ -181,6 +183,7 @@ async function onClick(e) {
   if (act === "actif") await upd("profils", id, { actif: b.dataset.v === "1" });
   else if (act === "role") await upd("profils", id, { role: b.dataset.v });
   else if (act === "inv-del") await del("invitations", id);
+  else if (act === "inv-send") await envoyer(invitations.find((i) => i.id === id)?.email);
 }
 
 async function pdfExport(fn) {
@@ -235,7 +238,21 @@ async function createInvitation() {
   msg.textContent = "Création…";
   const { error } = await supa.from("invitations").insert({ email, role, pole_ids });
   if (error) { msg.textContent = "Erreur : " + error.message; return; }
+  msg.textContent = "Envoi de l'e-mail…";
+  const r = await sendInvitation(email);
   await reload();
+  const m = document.getElementById("inv-msg");
+  if (m) m.textContent = r.error
+    ? "Invitation enregistrée, mais l'e-mail n'est pas parti : " + r.error.message + " (bouton « Envoyer » pour réessayer)."
+    : "Invitation envoyée à " + email + ".";
+}
+
+async function envoyer(email) {
+  if (!email) return;
+  const m = document.getElementById("inv-msg");
+  if (m) m.textContent = "Envoi à " + email + "…";
+  const r = await sendInvitation(email);
+  if (m) m.textContent = r.error ? "Échec de l'envoi : " + r.error.message : "E-mail envoyé à " + email + ".";
 }
 
 /* ---------- export ---------- */

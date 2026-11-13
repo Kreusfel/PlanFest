@@ -53,8 +53,29 @@ export function signUp(email, password) {
 }
 export function resetPassword(email) {
   return supa.auth.resetPasswordForEmail(email, {
-    redirectTo: location.href.split("#")[0],
+    redirectTo: retour(),
   });
 }
+// Adresse de retour des liens envoyés par e-mail (doit figurer dans
+// Supabase → Authentication → URL Configuration → Redirect URLs).
+const retour = () => location.href.split("#")[0];
+
+// Envoie l'e-mail d'invitation (ou, si le compte existe déjà, un lien pour choisir
+// son mot de passe). L'invitation doit déjà exister dans la table invitations.
+export async function sendInvitation(email) {
+  const { data, error } = await supa.functions.invoke("inviter", { body: { email, redirectTo: retour() } });
+  if (error) {
+    // Le corps de la réponse porte le message d'erreur de la fonction.
+    let m = error.message;
+    try { m = (await error.context.json()).error || m; } catch { /* corps illisible */ }
+    return { error: { message: m } };
+  }
+  return { data };
+}
+
+export function setPassword(password) {
+  return supa.auth.updateUser({ password });
+}
+
 export function signOut() { return supa.auth.signOut(); }
 export function onAuth(cb) { return supa.auth.onAuthStateChange(cb); }

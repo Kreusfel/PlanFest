@@ -1,6 +1,6 @@
 // Écran #/benevoles — Phase 1. Liste, fiche (coordonnées, équipes, repas, disponibilités), invitation.
 import { supa } from "../supabase.js";
-import { isAdmin, hasPole } from "../auth.js";
+import { isAdmin, hasPole, sendInvitation } from "../auth.js";
 import { store } from "../store.js";
 import { esc, plur } from "../ui/util.js";
 
@@ -264,9 +264,16 @@ async function invite() {
   const be = list.find((x) => x.id === view.id); if (!be) return;
   const b = be.benevoles, msg = root.querySelector("#b-msg");
   if (!b.email) { msg.textContent = "Renseigne un e-mail d'abord."; return; }
+  const email = b.email.trim().toLowerCase();
   msg.textContent = "Invitation…";
   const { error } = await supa.from("invitations").insert({
-    email: b.email.toLowerCase(), role: "membre", pole_ids: [], benevole_id: b.id,
+    email, role: "membre", pole_ids: [], benevole_id: b.id,
   });
-  msg.textContent = error ? "Erreur : " + error.message : "Invitation créée. Préviens la personne : elle crée son compte avec cet e-mail.";
+  // 23505 = invitation déjà existante pour cet e-mail : on renvoie simplement l'e-mail.
+  if (error && error.code !== "23505") { msg.textContent = "Erreur : " + error.message; return; }
+  msg.textContent = "Envoi de l'e-mail…";
+  const r = await sendInvitation(email);
+  msg.textContent = r.error
+    ? "Invitation enregistrée, mais l'e-mail n'est pas parti : " + r.error.message
+    : "Invitation envoyée à " + email + " : la personne reçoit un lien pour choisir son mot de passe.";
 }

@@ -1,6 +1,6 @@
 // Routeur à fragments d'adresse (#/...), barre latérale et garde d'accès.
 import { refreshSession, session, isActif, isAdmin, hasPole, signOut, onAuth, simPoles, isSimulating } from "./auth.js";
-import { supa } from "./supabase.js";
+import { supa, lienEmail } from "./supabase.js";
 import { store, setEdition } from "./store.js";
 import { esc } from "./ui/util.js";
 import * as connexion from "./ecrans/connexion.js";
@@ -135,10 +135,17 @@ function buildNav(path) {
 
 function currentPath() { return (location.hash.replace(/^#/, "") || "/").split("?")[0]; }
 
+let choixMotDePasse = lienEmail.type === "invite" || lienEmail.type === "recovery";
+
 function render() {
   const path = currentPath();
   if (path.startsWith("/public")) { renderPublic(path); return; }
-  if (!session.user) { app.innerHTML = ""; connexion.render(app); return; }
+  if (!session.user) { app.innerHTML = ""; connexion.render(app, lienEmail.erreur); lienEmail.erreur = null; return; }
+  // Arrivée par un lien d'invitation ou « mot de passe oublié » : choisir son mot de passe.
+  if (choixMotDePasse) {
+    connexion.renderMotDePasse(app, lienEmail.type === "invite", () => { choixMotDePasse = false; render(); });
+    return;
+  }
   if (!isActif()) { renderInactif(); return; }
   renderShell();
 }
@@ -229,12 +236,14 @@ async function loadEditions() {
 
 async function boot() {
   await refreshSession();
+  // Retirer les jetons ou l'erreur du lien e-mail de la barre d'adresse.
+  if (lienEmail.type || lienEmail.erreur) history.replaceState(null, "", location.pathname + location.search);
   render();
   onAuth(async () => { await refreshSession(); render(); });
   window.addEventListener("hashchange", () => {
     const path = currentPath();
     if (path.startsWith("/public")) renderPublic(path);
-    else if (session.user && isActif()) renderShell();
+    else if (session.user && isActif() && !choixMotDePasse) renderShell();
     else render();
   });
 }
