@@ -146,6 +146,7 @@ function ficheView() {
     <div class="sub">${(be.equipes || []).map(poleNom).join(" · ") || "sans équipe"}</div></div>
     <div class="head-actions"><button class="btn" id="back">← Liste</button>
       ${w && b.email && !b.profil_id ? `<button class="btn" id="invite">Inviter</button>` : ""}
+      ${isAdmin() ? `<button class="btn danger" id="effacer" title="Droit à l'effacement (RGPD)">Effacer la personne</button>` : ""}
       ${w ? `<button class="btn primary" id="save">Enregistrer</button>` : ""}</div></div>
     <div class="two">
       <div class="l card"><h2>Personne</h2>
@@ -185,6 +186,7 @@ function onClick(e) {
   if (t.closest("#b-create")) return createBen();
   if (t.closest("#save")) return saveFiche();
   if (t.closest("#invite")) return invite();
+  if (t.closest("#effacer")) return effacer();
   if (t.closest("#f-anim")) { filt.anim = !filt.anim; return go(); }
   const r = t.closest("[data-open]");
   if (r && !t.closest("[data-stop]")) return openFiche(r.dataset.open);
@@ -258,6 +260,19 @@ async function saveFiche() {
   Object.assign(be.benevoles, bPatch); Object.assign(be, ePatch);
   view = { mode: "list", id: null };
   go();
+}
+
+// Droit à l'effacement : fiche, inscriptions de toutes les éditions, formulaires
+// publics, invitation et compte de connexion (migration 033, effacer_benevole).
+async function effacer() {
+  const be = list.find((x) => x.id === view.id); if (!be) return;
+  const b = be.benevoles;
+  if (!confirm(`Effacer définitivement ${b.nom} ?\n\nSupprime sa fiche, ses inscriptions à toutes les éditions, ses disponibilités, présences et compétences, ses formulaires reçus, son invitation et son compte de connexion. Irréversible.`)) return;
+  const { error } = await supa.rpc("effacer_benevole", { p_benevole: b.id });
+  const msg = root.querySelector("#b-msg");
+  if (error) { if (msg) msg.textContent = "Erreur : " + error.message; return; }
+  view = { mode: "list", id: null };
+  await load(); go();
 }
 
 async function invite() {

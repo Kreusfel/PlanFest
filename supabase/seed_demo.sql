@@ -1,5 +1,5 @@
 -- seed_demo.sql — PlanFest : données fictives pour une démo.
--- À LANCER UNE SEULE FOIS dans le SQL Editor Supabase (après les migrations 001..011).
+-- À LANCER UNE SEULE FOIS dans le SQL Editor Supabase (après toutes les migrations).
 -- Crée une édition « Fécamp 2027 (démo) » et la remplit. Rejouable = crée une 2e édition
 -- + des doublons d'organismes/jeux/bénévoles (persistants). Pour repartir à zéro, supprimer
 -- l'édition démo (cascade) et les organismes/jeux/bénévoles créés ci-dessous.
@@ -30,27 +30,27 @@ begin
 
   -- ----- Organismes (persistants) + déclinaison par édition -----
   insert into organismes (nom, site, contact_nom, contact_email, contact_tel)
-    values ('Ludothèque La Pioche', 'https://lapioche.fr', 'Marie Dupont', 'marie@lapioche.fr', '0612345678') returning id into v_org;
+    values ('Ludothèque La Pioche', 'https://lapioche.fr', 'Marie Dupont', 'marie@example.org', '0612345678') returning id into v_org;
   insert into organisme_editions (organisme_id, edition_id, roles, statut, couleur, personnes_sam, personnes_dim, tables_souhaitees, electricite, convention_recue, assurance_recue)
     values (v_org, v_ed, array['partenaire']::text[], 'confirme', '#a9c6e8', 3, 2, 2, true, true, true) returning id into v_oe_a;
 
   insert into organismes (nom, contact_nom, contact_email)
-    values ('Association Jeux & Co', 'Karim Haddad', 'contact@jeuxandco.fr') returning id into v_org;
+    values ('Association Jeux & Co', 'Karim Haddad', 'contact@example.org') returning id into v_org;
   insert into organisme_editions (organisme_id, edition_id, roles, statut, couleur, personnes_sam, personnes_dim, tables_souhaitees)
     values (v_org, v_ed, array['partenaire']::text[], 'relance', '#f7b2b2', 2, 2, 1) returning id into v_oe_b;
 
   insert into organismes (nom, site, contact_nom, contact_email)
-    values ('Éditions Gigamic', 'https://gigamic.com', 'Paul Martin', 'pro@gigamic.com') returning id into v_org;
+    values ('Éditions Gigamic', 'https://gigamic.com', 'Paul Martin', 'pro@example.org') returning id into v_org;
   insert into organisme_editions (organisme_id, edition_id, roles, statut, couleur)
     values (v_org, v_ed, array['editeur']::text[], 'confirme', '#bfe3b4') returning id into v_oe_ed1;
 
   insert into organismes (nom, contact_nom, contact_email)
-    values ('Asmodee', 'Sophie Leroy', 'events@asmodee.com') returning id into v_org;
+    values ('Asmodee', 'Sophie Leroy', 'events@example.org') returning id into v_org;
   insert into organisme_editions (organisme_id, edition_id, roles, statut, couleur)
     values (v_org, v_ed, array['editeur']::text[], 'invite', '#c9b7e8') returning id into v_oe_ed2;
 
   insert into organismes (nom, contact_nom, contact_email)
-    values ('Banque Populaire', 'Service Mécénat', 'mecenat@bp.fr') returning id into v_org;
+    values ('Banque Populaire', 'Service Mécénat', 'mecenat@example.org') returning id into v_org;
   insert into organisme_editions (organisme_id, edition_id, roles, statut, couleur, nature_aide, logo_url)
     values (v_org, v_ed, array['sponsor']::text[], 'confirme', '#f7d8a0', 'Dotation 1500 € + lots tombola', 'https://exemple.fr/logo-bp.png') returning id into v_oe_sp;
 
@@ -159,7 +159,7 @@ begin
   -- ----- (option) relier le compte admin à Alice pour voir « Mon planning » / « Compétences » -----
   update benevoles b set profil_id = p.id
     from profils p
-   where p.email = 'kreusfel@gmail.com' and b.id = v_b1
+   where p.email = 'admin@example.org' and b.id = v_b1  -- remplacer par l'e-mail de VOTRE compte admin
      and not exists (select 1 from benevoles x where x.profil_id = p.id);
 
   raise notice 'Seed démo OK : édition %', v_ed;

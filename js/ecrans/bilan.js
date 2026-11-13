@@ -86,8 +86,14 @@ function exportCsv() {
 }
 async function purge() {
   const msg = root.querySelector("#b-msg");
-  if (!confirm("Effacer définitivement régimes, présences et disponibilités de cette édition ? Irréversible.")) return;
+  if (!confirm("Purger les données personnelles de cette édition ?\n\n"
+    + "• régimes alimentaires, présences, disponibilités\n"
+    + "• formulaires d'inscription publics reçus\n"
+    + "• noms des inscrits aux parties (le nombre de joueurs est gardé)\n"
+    + "• e-mail et téléphone des bénévoles qui n'ont pas accepté d'être recontactés\n\n"
+    + "Les statistiques du bilan sont conservées. Irréversible.")) return;
   msg.textContent = "Purge…";
-  const { error } = await supa.rpc("purger_edition", { p_edition: store.editionId });
-  msg.textContent = error ? "Erreur : " + error.message : "Données nominatives purgées.";
+  const { data, error } = await supa.rpc("purger_edition", { p_edition: store.editionId });
+  msg.textContent = error ? "Erreur : " + error.message
+    : `Données personnelles purgées (${data?.formulaires ?? 0} formulaire(s), ${data?.noms_parties ?? 0} nom(s) d'inscrits, coordonnées de ${data?.coordonnees_benevoles ?? 0} bénévole(s)).`;
 }
