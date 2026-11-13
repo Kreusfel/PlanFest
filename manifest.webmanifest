@@ -1,0 +1,11 @@
+{
+  "name": "PlanFest",
+  "short_name": "PlanFest",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#15803D",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -268,10 +268,8 @@ async function boot() {
 }
 boot();
 
-// Service worker DÉSACTIVÉ pendant le développement (évitait de servir du code périmé).
-// On désenregistre tout SW déjà présent et on vide ses caches. À réactiver (register)
-// avant le jour J pour le mode hors-ligne (le fichier sw.js reste prêt dans le dépôt).
+// Service worker : garde l'application ouvrable sans réseau le jour J (voir sw.js,
+// stratégie « réseau d'abord » : en ligne on a toujours la dernière version).
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
-  if (window.caches) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
 }

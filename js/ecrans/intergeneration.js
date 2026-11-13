@@ -114,9 +114,9 @@ function mallesTab() {
   malles.forEach((m) => { (groups[m.malle || "Sans malle"] = groups[m.malle || "Sans malle"] || []).push(m); });
   const names = Object.keys(groups).sort((a, b) => a.localeCompare(b, "fr"));
   const sections = names.map((g) => `<div class="card"><div class="ihead"><h3>${esc(g)}</h3><span class="muted">${groups[g].length} jeu${groups[g].length > 1 ? "x" : ""}</span></div>
-    <table class="data-table"><tbody>${groups[g].sort((a, b) => jeuNom(a.jeu_id).localeCompare(jeuNom(b.jeu_id), "fr")).map((m) => `<tr>
+    <div class="scroll"><table class="data-table"><tbody>${groups[g].sort((a, b) => jeuNom(a.jeu_id).localeCompare(jeuNom(b.jeu_id), "fr")).map((m) => `<tr>
       <td>${esc(jeuNom(m.jeu_id))}</td>
-      <td style="text-align:right">${canWrite() ? `<button class="btn small danger" data-mdel="${m.jeu_id}">Retirer</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`).join("")
+      <td style="text-align:right">${canWrite() ? `<button class="btn small danger" data-mdel="${m.jeu_id}">Retirer</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`).join("")
     || `<div class="card"><p class="muted">Aucun jeu sélectionné pour les malles.</p></div>`;
 
   const kpi = `<div class="grid g3"><div class="kpi"><span class="v">${malles.length}</span>Jeux en malle</div>

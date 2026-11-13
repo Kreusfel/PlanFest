@@ -106,9 +106,9 @@ function buildShell() {
         <div class="canvasbar">
           <span class="meta" id="cb-meta"></span>
           <span class="spacer"></span>
-          <button class="btn small" data-z="out">−</button>
+          <button class="btn small" data-z="out" aria-label="Dézoomer">−</button>
           <button class="btn small" data-z="fit">Ajuster</button>
-          <button class="btn small" data-z="in">+</button>
+          <button class="btn small" data-z="in" aria-label="Zoomer">+</button>
         </div>
         <div class="canvas" id="canvas">
           <svg id="plan" xmlns="http://www.w3.org/2000/svg">

@@ -31,3 +31,21 @@ export function refocus(root, selector, pos) {
   el.focus();
   try { el.setSelectionRange(pos, pos); } catch { /* type sans curseur */ }
 }
+
+// Message bref en bas d'écran, non bloquant (remplace alert() sur les écrans de terrain).
+// kind : "ok" | "err" (défaut "err").
+export function toast(message, kind = "err") {
+  let el = document.getElementById("pf-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "pf-toast";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    document.body.appendChild(el);
+  }
+  el.className = "toast " + kind;
+  el.textContent = message;
+  el.hidden = false;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.hidden = true; }, 5000);
+}

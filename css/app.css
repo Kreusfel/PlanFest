@@ -54,8 +54,8 @@ a{color:var(--primary)}
 .pole-legend-grid span{display:flex;align-items:center;gap:7px;color:var(--muted)}
 .grp-pole{color:var(--primary)}
 .nav-sep{height:1px;background:var(--line);margin:8px 6px}
-.grp.secondary{opacity:.7}
-.navlink.secondary{color:#9a9aa2;font-weight:500}
+.grp.secondary{opacity:1;color:var(--muted)}
+.navlink.secondary{color:var(--muted);font-weight:500}
 .navlink.secondary:hover{color:#111}
 .navlink.secondary.on{color:#fff}
 .side-foot{padding-top:12px;margin-top:6px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
@@ -96,6 +96,8 @@ a{color:var(--primary)}
 .btn.danger:hover{background:var(--alert-bg)}
 .btn.small{min-height:38px;padding:8px 12px;font-size:13px}
 .btn.block{width:100%}
+/* Désactivé : visiblement inactif (avant, identique à un bouton actif). */
+.btn:disabled,.btn[disabled],.niv:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
 .link{background:none;border:0;color:var(--primary);cursor:pointer;font:inherit;font-weight:600;padding:4px;align-self:flex-start}
 
 /* ---------- Formulaires ---------- */
@@ -104,6 +106,12 @@ input,select,textarea{font:inherit;color:var(--ink);background:var(--card);borde
 /* Listes déroulantes : flèche maison, au lieu du rendu natif « bouton brillant » de Safari/macOS. */
 select:not([multiple]){-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236B6B73' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;padding-right:32px;cursor:pointer}
 select:not([multiple]):disabled{cursor:default;opacity:.6}
+/* Cases, boutons radio et fichiers : la règle générale des champs (largeur 100 %,
+   44 px de haut, padding) ne doit pas s'y appliquer ; couleur de l'app au lieu du bleu natif. */
+input[type=checkbox],input[type=radio]{width:auto;min-height:0;padding:0;margin:0 6px 0 0;accent-color:var(--primary);vertical-align:middle;cursor:pointer}
+input[type=file]{padding:6px;min-height:0;cursor:pointer}
+input[type=file]::file-selector-button{font:inherit;font-weight:600;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-right:10px;cursor:pointer}
+input[type=file]::file-selector-button:hover{border-color:#111;background:var(--soft)}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--primary);outline-offset:0;border-color:var(--primary)}
 input.err{border-color:var(--alert)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -259,13 +267,14 @@ input[type=color]{padding:3px;height:44px}
 .reg-list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
 
 /* ---------- Compétences ---------- */
-.comp-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
+.comp-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:7px 0;border-bottom:1px solid var(--line)}
 .comp-nom{font-weight:600}
-.niv-grp{display:flex;gap:4px;flex:none}
+.niv-grp{display:flex;flex-wrap:wrap;gap:4px;flex:none;max-width:100%}
 .niv{cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:600;min-height:36px}
 .niv.on.ok{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
 .niv.on.amber{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
 .niv.on.grey{background:var(--grey);border-color:var(--line);color:var(--ink)}
+.niv.on.alert{background:var(--alert-bg);border-color:var(--alert);color:var(--alert)}
 
 /* ---------- Page publique ---------- */
 .public-wrap{max-width:720px;margin:0 auto;padding:24px 18px 60px;min-height:100vh}
@@ -334,7 +343,7 @@ input[type=color]{padding:3px;height:44px}
 .swipe-head h1{font-size:22px}
 .swipe-card{min-height:360px;touch-action:none;user-select:none;cursor:grab;gap:12px}
 .swipe-card:active{cursor:grabbing}
-.swipe-cov{flex:1;min-height:200px;font-size:13px}
+.swipe-cov{flex:1;min-height:200px;font-size:13px;display:flex;align-items:center;justify-content:center;background:var(--soft);border-radius:var(--radius);color:var(--muted);overflow:hidden}
 .swipe-cov img{width:100%;height:100%;object-fit:contain}
 .swipe-btns{display:flex;gap:8px}
 .swipe-btns .big{flex:1;padding:10px 8px;text-align:center;line-height:1.2}
@@ -390,3 +399,11 @@ input[type=color]{padding:3px;height:44px}
   .main{padding:16px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- Jour J : états hors-ligne, messages ---------- */
+.sync-warn{margin:12px 0 0;padding:10px 12px;border-radius:8px;background:var(--warn-bg);color:var(--warn);font-size:13px;font-weight:600}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:1000;
+  max-width:min(520px,calc(100vw - 32px));padding:12px 16px;border-radius:10px;font-size:14px;font-weight:600;
+  box-shadow:0 6px 24px rgba(0,0,0,.18);background:var(--alert-bg);color:var(--alert);border:1px solid var(--alert)}
+.toast.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.toast[hidden]{display:none}

@@ -6,14 +6,17 @@
 import { supa } from "../supabase.js";
 import { session } from "../auth.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
 import { qAdd, qAll, qDel } from "../offline/idb.js";
 
 const TRANCHES = [["3+", "3 ans +"], ["6+", "6 ans +"], ["8+", "8 ans +"], ["13+", "13 ans +"], ["adulte", "Adulte"]];
 const JOURS = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
 let root, jours = ["sam", "dim"], jour = "sam", tab = "entrees";
 let ville = "Fécamp", cp = "76400", basket = {}, counts = {}, synced = true, lastGroup = [];
-let parties = [], insc = [];
+let parties = [], insc = [], retry = null;
+const onOnline = () => { if (store.editionId) refresh(); };
+const onOffline = () => { if (root?.isConnected) draw(); };
+const countsKey = () => `pf_accueil_${store.editionId}_${jour}`;
 
 export async function render(container) {
   root = container;
@@ -25,8 +28,18 @@ export async function render(container) {
   const ed = await supa.from("editions").select("jours_actifs").eq("id", store.editionId).single();
   jours = ed.data?.jours_actifs?.length ? ed.data.jours_actifs : ["sam", "dim"];
   if (!jours.includes(jour)) jour = jours[0];
-  wireOnce();
+  unmount();
+  window.addEventListener("online", onOnline);
+  window.addEventListener("offline", onOffline);
+  retry = setInterval(flush, 30000);  // wifi « connecté » sans Internet : on réessaie
   await refresh();
+}
+
+// Appelé par le routeur en quittant l'écran : plus d'écouteurs ni de réessai fantômes.
+export function unmount() {
+  window.removeEventListener("online", onOnline);
+  window.removeEventListener("offline", onOffline);
+  clearInterval(retry); retry = null;
 }
 
 async function refresh() {
@@ -44,7 +57,13 @@ async function refresh() {
   }
   const c = {}; TRANCHES.forEach((t) => (c[t[0]] = 0));
   const serverIds = new Set();
-  if (!error) (data ?? []).forEach((r) => { serverIds.add(r.id); c[r.tranche_age] = (c[r.tranche_age] || 0) + 1; });
+  if (!error) {
+    data.forEach((r) => { serverIds.add(r.id); c[r.tranche_age] = (c[r.tranche_age] || 0) + 1; });
+    try { localStorage.setItem(countsKey(), JSON.stringify(c)); } catch { /* stockage indisponible */ }
+  } else {
+    // Hors ligne : derniers totaux serveur connus sur cet appareil (+ la file ci-dessous).
+    try { Object.assign(c, JSON.parse(localStorage.getItem(countsKey())) || {}); } catch { /* rien */ }
+  }
   const q = (await qAll()).filter((e) => e.edition_id === ed && e.jour === jour && !serverIds.has(e.id));
   q.forEach((e) => { c[e.tranche_age] = (c[e.tranche_age] || 0) + 1; });
   counts = c; synced = q.length === 0;
@@ -80,7 +99,7 @@ function entreesTab() {
 
   const tiles = TRANCHES.map(([k, lbl]) => `<div class="acc-tile">
       <button class="acc-add" data-add="${k}"><span class="acc-count">${basket[k] || 0}</span><span class="acc-lbl">${esc(lbl)}</span><span class="acc-plus">+1</span></button>
-      <button class="acc-sub" data-sub="${k}"${basket[k] ? "" : " disabled"}>−</button>
+      <button class="acc-sub" data-sub="${k}" aria-label="Retirer un ${esc(lbl)}"${basket[k] ? "" : " disabled"}>−</button>
     </div>`).join("");
 
   const valider = `<div class="acc-valider">
@@ -125,7 +144,7 @@ function inscTab() {
           ${reste != null && !full ? `<span class="muted">${reste} place${reste > 1 ? "s" : ""} restante${reste > 1 ? "s" : ""}</span>` : ""}
         </div>
         ${mine.length ? `<details class="insc-list"><summary>${mine.length} inscription${mine.length > 1 ? "s" : ""}</summary>
-          ${mine.map((i) => `<div class="insc-row"><span>${esc(i.nom || "—")} · ${i.nb} pers.</span><button class="btn small danger" data-idel="${i.id}">×</button></div>`).join("")}</details>` : ""}
+          ${mine.map((i) => `<div class="insc-row"><span>${esc(i.nom || "—")} · ${i.nb} pers.</span><button class="btn small danger" data-idel="${i.id}" aria-label="Supprimer l'inscription">×</button></div>`).join("")}</details>` : ""}
       </div>`;
     }).join("");
     return `<div class="ihead" style="margin-top:8px"><h2 class="sect-title">${esc(JOURS[j] || j)}</h2></div>${rows}`;
@@ -134,12 +153,6 @@ function inscTab() {
 }
 
 /* ---------- câblage ---------- */
-function wireOnce() {
-  if (root.__accWired) return;
-  root.__accWired = true;
-  window.addEventListener("online", () => { if (store.editionId) refresh(); });
-  window.addEventListener("offline", draw);
-}
 function wire() {
   root.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; draw(); }));
   root.querySelectorAll("[data-jour]").forEach((b) => (b.onclick = () => { jour = b.dataset.jour; refresh(); }));
@@ -175,12 +188,17 @@ async function validerGroupe() {
 
 async function undoGroup() {
   if (!lastGroup.length) return;
+  const enFile = new Set((await qAll().catch(() => [])).map((e) => e.id));
+  const restants = [];
   for (const e of lastGroup) {
-    await qDel(e.id).catch(() => {});
-    await supa.from("entrees").delete().eq("id", e.id);
+    if (enFile.has(e.id)) await qDel(e.id).catch(() => {});  // jamais parti : retrait local suffit
+    const { error } = await supa.from("entrees").delete().eq("id", e.id);
+    // Déjà envoyée et suppression impossible (hors ligne) : on ne fait pas semblant.
+    if (error && !enFile.has(e.id)) { restants.push(e); continue; }
     counts[e.tranche_age] = Math.max(0, (counts[e.tranche_age] || 0) - 1);
   }
-  lastGroup = []; draw();
+  lastGroup = restants; draw();
+  if (restants.length) toast(`Annulation incomplète (réseau) : ${restants.length} entrée(s) restent comptées. Réessaie quand le réseau revient.`);
 }
 
 async function inscrire(partieId) {
@@ -189,27 +207,27 @@ async function inscrire(partieId) {
   const p = parties.find((x) => x.id === partieId);
   if (p && p.places != null) {
     const pris = insc.filter((i) => i.partie_id === partieId).reduce((s, i) => s + i.nb, 0);
-    if (pris + nb > p.places) { alert(`Impossible : ${p.places - pris} place(s) restante(s) sur ${p.places} (déjà ${pris} inscrit·e·s).`); return; }
+    if (pris + nb > p.places) { toast(`Impossible : ${p.places - pris} place(s) restante(s) sur ${p.places} (déjà ${pris} inscrit·e·s).`); return; }
   }
   const { data, error } = await supa.from("partie_inscriptions")
     .insert({ edition_id: store.editionId, partie_id: partieId, nom, nb, saisi_par: session.user.id }).select().single();
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Inscription non enregistrée : " + error.message); return; }
   insc.push(data); draw();
 }
 async function delInsc(id) {
   const { error } = await supa.from("partie_inscriptions").delete().eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Suppression impossible : " + error.message); return; }
   insc = insc.filter((i) => i.id !== id); draw();
 }
 
 let flushing = false;
 async function flush() {
-  if (flushing || !navigator.onLine) return;
+  if (flushing) return;  // pas de test navigator.onLine : il ment sur un wifi sans Internet
   flushing = true;
   try {
     const q = await qAll();
     for (const e of q) { const { error } = await supa.from("entrees").upsert(e); if (!error) await qDel(e.id); }
     const left = (await qAll()).length;
-    if (synced !== (left === 0)) { synced = left === 0; draw(); }
-  } finally { flushing = false; }
+    if (synced !== (left === 0)) { synced = left === 0; if (root?.isConnected) draw(); }
+  } catch { /* IndexedDB indisponible */ } finally { flushing = false; }
 }

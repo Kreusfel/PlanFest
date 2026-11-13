@@ -55,16 +55,16 @@ function draw() {
     const ts = tables.filter((t) => t.salle_id === s.id);
     if (!ts.length) return "";
     return `<div class="card"><div class="ihead"><h3>${esc(s.nom)}</h3><span class="muted">${ts.length} table${ts.length > 1 ? "s" : ""}</span></div>
-      <table class="data-table"><thead><tr><th>Table</th><th>Partenaire</th></tr></thead>
-      <tbody>${ts.map((t) => `<tr><td><b>n°${esc(t.numero ?? "?")}</b></td><td>${partSelect(t)}</td></tr>`).join("")}</tbody></table></div>`;
+      <div class="scroll"><table class="data-table"><thead><tr><th>Table</th><th>Partenaire</th></tr></thead>
+      <tbody>${ts.map((t) => `<tr><td><b>n°${esc(t.numero ?? "?")}</b></td><td>${partSelect(t)}</td></tr>`).join("")}</tbody></table></div></div>`;
   }).join("");
 
   const aPlacerCard = aPlacer.length
     ? `<div class="card"><div class="ihead"><h3>Partenaires à compléter</h3><span class="muted">${aPlacer.length}</span></div>
-       <table class="data-table"><thead><tr><th>Partenaire</th><th style="text-align:right">Tables</th></tr></thead>
+       <div class="scroll"><table class="data-table"><thead><tr><th>Partenaire</th><th style="text-align:right">Tables</th></tr></thead>
        <tbody>${aPlacer.map((p) => `<tr>
          <td>${esc(p.nom)}${p.statut !== "confirme" ? ` <span class="muted">(à confirmer)</span>` : ""}</td>
-         <td style="text-align:right"><span class="tag ${p.placed === 0 ? "bad" : "warn"}">${p.placed}/${p.souhait} table${p.souhait > 1 ? "s" : ""}</span></td></tr>`).join("")}</tbody></table>
+         <td style="text-align:right"><span class="tag ${p.placed === 0 ? "bad" : "warn"}">${p.placed}/${p.souhait} table${p.souhait > 1 ? "s" : ""}</span></td></tr>`).join("")}</tbody></table></div>
        ${sansSouhait.length ? `<p class="mini">${sansSouhait.length} partenaire(s) sans nombre de tables renseigné (à compléter sur leur fiche).</p>` : ""}</div>`
     : `<div class="card"><p class="muted">Tous les partenaires ont le nombre de tables souhaité. 🎉${sansSouhait.length ? ` <span class="mini">(${sansSouhait.length} sans nombre renseigné)</span>` : ""}</p></div>`;
 

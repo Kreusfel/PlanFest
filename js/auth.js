@@ -31,12 +31,24 @@ export function simPoles() {
 export function isSimulating() { return !!simPoles(); }
 
 async function loadProfil() {
-  const { data: p } = await supa
-    .from("profils").select("*").eq("id", session.user.id).maybeSingle();
-  session.profil = p ?? null;
-  const { data: rp } = await supa
-    .from("responsables_pole").select("poles(code)").eq("profil_id", session.user.id);
-  session.poles = (rp ?? []).map((r) => r.poles?.code).filter(Boolean);
+  const key = "pf_profil_" + session.user.id;
+  const [p, rp] = await Promise.all([
+    supa.from("profils").select("*").eq("id", session.user.id).maybeSingle(),
+    supa.from("responsables_pole").select("poles(code)").eq("profil_id", session.user.id),
+  ]);
+  if (!p.error && !rp.error) {
+    session.profil = p.data ?? null;
+    session.poles = (rp.data ?? []).map((r) => r.poles?.code).filter(Boolean);
+    try { localStorage.setItem(key, JSON.stringify({ profil: session.profil, poles: session.poles })); } catch { /* stockage indisponible */ }
+  } else {
+    // Réseau absent (jour J, wifi saturé) : dernier profil connu sur cet appareil,
+    // plutôt que « Compte en attente » + déconnexion. Les droits réels restent
+    // vérifiés par la base à chaque requête.
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem(key)); } catch { /* rien */ }
+    session.profil = c?.profil ?? null;
+    session.poles = c?.poles ?? [];
+  }
   const sim = simPoles();
   if (sim) session.poles = sim; // override d'affichage pour le test
 }

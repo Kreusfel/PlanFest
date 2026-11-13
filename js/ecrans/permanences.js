@@ -162,9 +162,9 @@ function couvTab() {
     <span><i style="background:#FEF3C7;border:1px solid #D4A72C"></i>Partielle</span>
     <span><i style="background:#FEE2E2;border:1px solid #DC2626"></i>Non couverte</span>
     <span><i style="border:2px dashed #EA580C;background:#fff"></i>Trou (anneau orange)</span></div>`;
-  return `${horairesCard}${kpis}${plan}<div class="card"><table class="data-table">
+  return `${horairesCard}${kpis}${plan}<div class="card"><div class="scroll"><table class="data-table">
     <thead><tr><th>Table</th><th>État</th><th>Trous (créneaux non couverts)</th></tr></thead>
-    <tbody>${rows}</tbody></table></div>${legend}`;
+    <tbody>${rows}</tbody></table></div></div>${legend}`;
 }
 
 function salleSVG(salle, covByTable) {
@@ -264,12 +264,12 @@ function permTab() {
   const sections = used.map((poste) => {
     const rows = dayPerms.filter((p) => p.poste === poste).sort((a, b) => (a.debut || "").localeCompare(b.debut || ""));
     return `<div class="card"><div class="ihead"><h3>${esc(poste)}</h3><span class="muted">${rows.length} créneau${rows.length > 1 ? "x" : ""}</span></div>
-      <table class="data-table"><thead><tr><th>Horaire</th><th>Bénévole</th><th>Table</th><th></th></tr></thead>
+      <div class="scroll"><table class="data-table"><thead><tr><th>Horaire</th><th>Bénévole</th><th>Table</th><th></th></tr></thead>
       <tbody>${rows.map((r) => `<tr>
         <td><b>${hhmm(r.debut)}–${hhmm(r.fin)}</b></td>
         <td><select data-setben="${r.id}" style="min-width:150px;margin:0">${benOpts(r.benevole_edition_id)}</select></td>
         <td>${r.element_id ? esc(locLabel(r.element_id)) : `<span class="muted">—</span>`}</td>
-        <td style="text-align:right"><button class="btn small danger" data-del="${r.id}">Suppr.</button></td></tr>`).join("")}</tbody></table></div>`;
+        <td style="text-align:right"><button class="btn small danger" data-del="${r.id}">Suppr.</button></td></tr>`).join("")}</tbody></table></div></div>`;
   }).join("");
   return form + (used.length ? sections : `<div class="card"><p class="muted">Aucune permanence ${esc(JOURS[jour] || jour)}. Ajoute un créneau ci-dessus.</p></div>`);
 }
