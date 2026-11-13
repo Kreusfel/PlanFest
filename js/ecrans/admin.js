@@ -93,12 +93,14 @@ function cardMembres() {
         <span class="pill ${m.role === "admin" ? "amber" : "grey"}">${m.role === "admin" ? "Admin" : "Membre"}</span>
         ${self ? `<span class="mini">(vous)</span>` : `
           <button class="btn small" data-act="actif" data-id="${m.id}" data-v="${m.actif ? "0" : "1"}">${m.actif ? "Désactiver" : "Activer"}</button>
-          <button class="btn small" data-act="role" data-id="${m.id}" data-v="${m.role === "admin" ? "membre" : "admin"}">${m.role === "admin" ? "Rétrograder" : "Promouvoir admin"}</button>`}
+          <button class="btn small" data-act="role" data-id="${m.id}" data-v="${m.role === "admin" ? "membre" : "admin"}">${m.role === "admin" ? "Rétrograder" : "Promouvoir admin"}</button>
+          <button class="btn small danger" data-act="compte-del" data-id="${m.id}">Supprimer</button>`}
       </div>
     </div>`;
   }).join("") || `<p class="muted">Aucun compte pour l'instant.</p>`;
   return `<div class="card admin-sec"><h2>Membres et pôles</h2>
-    <p class="mini">Coche les pôles dont la personne est responsable (droits d'écriture associés).</p>
+    <p class="mini">Coche les pôles dont la personne est responsable (droits d'écriture associés).
+      « Supprimer » efface le compte de connexion ; une éventuelle fiche bénévole est conservée.</p>
     <div class="list">${rows}</div></div>`;
 }
 
@@ -183,6 +185,7 @@ async function onClick(e) {
   if (act === "actif") await upd("profils", id, { actif: b.dataset.v === "1" });
   else if (act === "role") await upd("profils", id, { role: b.dataset.v });
   else if (act === "inv-del") await del("invitations", id);
+  else if (act === "compte-del") await supprimerCompte(members.find((m) => m.id === id));
   else if (act === "inv-send") await envoyer(invitations.find((i) => i.id === id)?.email);
 }
 
@@ -245,6 +248,14 @@ async function createInvitation() {
   if (m) m.textContent = r.error
     ? "Invitation enregistrée, mais l'e-mail n'est pas parti : " + r.error.message + " (bouton « Envoyer » pour réessayer)."
     : "Invitation envoyée à " + email + ".";
+}
+
+async function supprimerCompte(m) {
+  if (!m) return;
+  if (!confirm(`Supprimer définitivement le compte ${m.email} ?\n\nLa personne ne pourra plus se connecter ; son invitation est effacée (tu pourras la réinviter). Sa fiche bénévole éventuelle est conservée.`)) return;
+  const { error } = await supa.rpc("supprimer_compte", { p_profil: m.id });
+  if (error) { alert("Erreur : " + error.message); return; }
+  await reload();
 }
 
 async function envoyer(email) {
