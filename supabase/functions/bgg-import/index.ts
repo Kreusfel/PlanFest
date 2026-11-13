@@ -1,7 +1,8 @@
 // Edge Function bgg-import — proxy vers l'API XML publique de BoardGameGeek.
 // Actions : { action:"search", query } → résultats enrichis ; { action:"thing", bgg_id } → 1 jeu.
 // Déploiement : supabase functions deploy bgg-import
-// (L'API BGG v2 ne requiert pas de jeton ; si un jeton devient nécessaire, le garder ICI.)
+// Jeton d'application BGG : secret Supabase BGG_TOKEN (Edge Functions → Secrets),
+// envoyé en « Authorization: Bearer … ». Il reste côté serveur, jamais dans le navigateur.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -43,9 +44,16 @@ function parseItem(itemXml: string) {
   };
 }
 // BGG renvoie parfois 202 (requête en file) ou 429/503 (débit) : on réessaie avec un backoff.
+const BGG_TOKEN = Deno.env.get("BGG_TOKEN");
+const bggHeaders: Record<string, string> = { "User-Agent": "PlanFest/1.0 (festival tool)" };
+if (BGG_TOKEN) bggHeaders.Authorization = `Bearer ${BGG_TOKEN}`;
+
 async function fetchText(url: string, tries = 4): Promise<string> {
   for (let i = 0; i < tries; i++) {
-    const r = await fetch(url, { headers: { "User-Agent": "PlanFest/1.0 (festival tool)" } });
+    const r = await fetch(url, { headers: bggHeaders });
+    if (r.status === 401 || r.status === 403) {
+      throw new Error(BGG_TOKEN ? "BGG refuse le jeton (BGG_TOKEN invalide ou révoqué)." : "BGG exige un jeton : définir le secret BGG_TOKEN.");
+    }
     if (r.status === 200) return await r.text();
     if (r.status === 202 || r.status === 429 || r.status === 503) {
       await new Promise((res) => setTimeout(res, 700 * (i + 1)));
