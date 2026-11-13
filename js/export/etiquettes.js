@@ -1,8 +1,8 @@
 // Export étiquettes de table en PDF (jsPDF) : 8 par page A4, numéro + partenaire + bande couleur.
 import { jsPDF } from "../../vendor/jspdf.js";
 import { supa } from "../supabase.js";
+import { slug } from "../ui/util.js";
 
-const slug = (s) => (s || "edition").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 function hexToRgb(h) {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h || "");
   return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [200, 200, 200];

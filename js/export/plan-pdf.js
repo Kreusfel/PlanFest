@@ -3,9 +3,8 @@
 import { jsPDF } from "../../vendor/jspdf.js";
 import { supa } from "../supabase.js";
 import { CELL, M } from "../plan/render.js";
-import { esc } from "../ui/util.js";
+import { esc, slug } from "../ui/util.js";
 
-const slug = (s) => (s || "plan").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 const trunc = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 
 function style(e, info) {
@@ -89,6 +88,6 @@ export async function exportPlanPng(editionId, salle, els, mode) {
   const { svg } = buildSalleSVG(salle, els, mode, nameMap);
   const png = await svgToPng(svg, 2);
   const a = document.createElement("a");
-  a.href = png; a.download = `plan-${slug(salle.nom)}.png`;
+  a.href = png; a.download = `plan-${slug(salle.nom, "plan")}.png`;
   document.body.appendChild(a); a.click(); a.remove();
 }

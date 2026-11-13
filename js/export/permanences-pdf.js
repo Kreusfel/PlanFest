@@ -3,8 +3,8 @@
 //  - exportPlanningTables   : planning par table (animations + permanences sur la table).
 import { jsPDF } from "../../vendor/jspdf.js";
 import { supa } from "../supabase.js";
+import { slug } from "../ui/util.js";
 
-const slug = (s) => (s || "edition").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 const JO = { ven: 0, sam: 1, dim: 2 };
 const JLBL = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
 const hhmm = (t) => (t ? String(t).slice(0, 5) : "");

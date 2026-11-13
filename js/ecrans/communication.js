@@ -8,6 +8,7 @@ import { store } from "../store.js";
 import { esc, refocus } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { qrSVG } from "../export/qr.js";
+import { parseCSV, norm } from "../ui/csv.js";
 
 const STATUTS = [["a_faire", "À faire"], ["envoye", "Envoyé"], ["distribue", "Distribué"]];
 const TYPES = ["Mairie", "École", "Presse", "Commerce", "Association", "Autre"];
@@ -219,20 +220,6 @@ const COLS = {
   quantite_flyers: ["flyers", "nombre", "quantite", "qte", "nbflyers"],
   notes: ["notes", "note", "autre", "organisme", "courriel2", "courriel3"],
 };
-const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-function parseCSV(text) {
-  const rows = []; let row = [], f = "", inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQ) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else inQ = false; } else f += c; }
-    else if (c === '"') inQ = true;
-    else if (c === "," || c === ";" || c === "\t") { row.push(f); f = ""; }
-    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); if (row.some((v) => v.trim() !== "")) rows.push(row); row = []; f = ""; }
-    else f += c;
-  }
-  if (f !== "" || row.length) { row.push(f); if (row.some((v) => v.trim() !== "")) rows.push(row); }
-  return rows;
-}
 async function csvImport() {
   const text = root.querySelector("#csv-text")?.value || "";
   const defType = (root.querySelector("#csv-type")?.value || "").trim() || null;

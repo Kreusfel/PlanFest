@@ -1,7 +1,7 @@
 // Écran #/bilan — Phase 5. Compteurs de l'édition, export CSV, purge RGPD. Admin.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, telecharger } from "../ui/util.js";
 
 const JOUR_LBL = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
 let root, data = null, edNom = "";
@@ -70,19 +70,13 @@ function wireOnce() {
   });
 }
 
-function download(name, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 function exportCsv() {
   const detail = data.entrees?.detail || [];
   const rows = [["Jour", "Tranche", "Entrées"]];
   detail.forEach((d) => rows.push([JOUR_LBL[d.jour] || d.jour, d.tranche, d.n]));
   const body = rows.map((r) => r.join(";")).join("\r\n");
   const nom = (edNom || "edition").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-  download(`bilan-entrees-${nom}.csv`, String.fromCharCode(0xFEFF) + body); // BOM UTF-8 pour Excel FR
+  telecharger(`bilan-entrees-${nom}.csv`, String.fromCharCode(0xFEFF) + body, "text/csv;charset=utf-8"); // BOM UTF-8 pour Excel FR
 }
 async function purge() {
   const msg = root.querySelector("#b-msg");

@@ -1,8 +1,8 @@
 // Export fiches d'accueil partenaires en PDF (jsPDF) : une page A4 par partenaire.
 import { jsPDF } from "../../vendor/jspdf.js";
 import { supa } from "../supabase.js";
+import { slug } from "../ui/util.js";
 
-const slug = (s) => (s || "edition").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 
 const CONSIGNES = [
   "Récupérez votre badge à l'accueil en arrivant.",

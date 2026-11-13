@@ -6,6 +6,7 @@ import { supa } from "../supabase.js";
 import { store } from "../store.js";
 import { esc } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
+import { parseCSV, norm } from "../ui/csv.js";
 
 const STATUTS = [["invite", "Invité"], ["confirme", "Confirmé"], ["venu", "Venu"], ["decline", "Décline"]];
 const ETAB_TYPES = ["EHPAD", "Handicap", "Foyer", "Autre"];
@@ -209,20 +210,6 @@ const COLS = {
   telephone: ["telephone", "tel"], commune: ["commune", "ville"], adresse: ["adresse", "adressepostale"],
   code_postal: ["codepostal", "cp"], notes: ["notes", "note", "autre"],
 };
-const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-function parseCSV(text) {
-  const rows = []; let row = [], f = "", q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
-    else if (c === '"') q = true;
-    else if (c === "," || c === ";" || c === "\t") { row.push(f); f = ""; }
-    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); if (row.some((v) => v.trim())) rows.push(row); row = []; f = ""; }
-    else f += c;
-  }
-  if (f !== "" || row.length) { row.push(f); if (row.some((v) => v.trim())) rows.push(row); }
-  return rows;
-}
 async function csvImport() {
   const text = root.querySelector("#csv-text")?.value || "";
   const defType = (root.querySelector("#csv-type")?.value || "").trim() || null;

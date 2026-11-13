@@ -49,3 +49,15 @@ export function toast(message, kind = "err") {
   clearTimeout(el._t);
   el._t = setTimeout(() => { el.hidden = true; }, 5000);
 }
+
+// Fait télécharger un texte comme fichier (CSV, JSON…) par le navigateur.
+export function telecharger(nom, texte, type = "text/plain;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([texte], { type }));
+  const a = document.createElement("a");
+  a.href = url; a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Nom de fichier à partir d'un libellé (« Fécamp 2027 » → « f-camp-2027 »).
+export const slug = (s, defaut = "edition") => (s || defaut).replace(/[^a-z0-9]+/gi, "-").toLowerCase();

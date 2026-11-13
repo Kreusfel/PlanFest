@@ -3,7 +3,7 @@
 import { supa } from "../supabase.js";
 import { session, isAdmin, sendInvitation } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur, aujourdhui } from "../ui/util.js";
+import { esc, plur, aujourdhui, telecharger } from "../ui/util.js";
 import { exportMontage } from "../export/montage.js";
 import { exportEtiquettes } from "../export/etiquettes.js";
 import { exportFiches } from "../export/fiches.js";
@@ -275,13 +275,6 @@ async function envoyer(email) {
 }
 
 /* ---------- export ---------- */
-function download(name, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  const a = document.createElement("a");
-  a.href = url; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 async function exportPlan() {
   const msg = document.getElementById("imp-msg");
   if (!store.editionId) { msg.textContent = "Aucune édition courante (ouvre-en une dans « Plan des salles »)."; return; }
@@ -292,7 +285,7 @@ async function exportPlan() {
   if (s.error || el.error) { msg.textContent = "Erreur export."; return; }
   const out = { kind: "planfest-edition", edition_id: store.editionId,
     exporte_le: new Date().toISOString(), salles: s.data ?? [], elements: el.data ?? [] };
-  download("plan-" + store.editionId.slice(0, 8) + ".json", JSON.stringify(out, null, 2));
+  telecharger("plan-" + store.editionId.slice(0, 8) + ".json", JSON.stringify(out, null, 2), "application/json");
   msg.textContent = `Exporté : ${plur((s.data ?? []).length, "salle", "salles")}, ${plur((el.data ?? []).length, "élément", "éléments")}.`;
 }
 
