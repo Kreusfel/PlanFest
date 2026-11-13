@@ -23,6 +23,11 @@ export async function render(c) {
         <b>${esc(e.nom)}${e.programme_publie ? ' <span class="pill ok">publié</span>' : ""}</b>
         <span class="muted">samedi ${esc(e.date_samedi)} · ${ETATS[e.etat] || e.etat}</span>
         ${e.programme_publie ? `<span class="mini">Programme public : <a href="#/public/programme/${e.id}">ouvrir</a> · <button class="link" data-copy="${esc(lien(e.id))}">copier le lien</button></span><div class="qr" title="QR du programme public">${qrSVG(lien(e.id))}</div>` : ""}
+        ${isAdmin() ? `<details class="pub-editor"><summary>Contenu public (visiteurs)</summary>
+          <label>Texte de présentation (activités, food trucks, partenaires…)
+            <textarea data-pres="${e.id}" placeholder="Décris le festival pour les visiteurs…">${esc(e.presentation || "")}</textarea></label>
+          <button class="btn primary" data-savepub="${e.id}">Enregistrer</button>
+        </details>` : ""}
       </div>
       <div class="actions">
         <button class="btn" data-open="${e.id}">Ouvrir</button>
@@ -84,6 +89,15 @@ export async function render(c) {
     if (!confirm("Clôturer cette édition ? Cette action marque l'édition comme terminée.")) return;
     const { error } = await supa.from("editions").update({ etat: "cloturee" }).eq("id", b.dataset.close);
     msg.textContent = error ? "Erreur : " + error.message : "Édition clôturée.";
+    if (!error) reload();
+  }));
+
+  c.querySelectorAll("[data-savepub]").forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.savepub;
+    const pres = c.querySelector(`[data-pres="${id}"]`).value || null;
+    msg.textContent = "Enregistrement…";
+    const { error } = await supa.from("editions").update({ presentation: pres }).eq("id", id);
+    msg.textContent = error ? "Erreur : " + error.message : "Contenu public enregistré.";
     if (!error) reload();
   }));
 

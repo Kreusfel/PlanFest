@@ -63,6 +63,17 @@ function blocSVG(b, sel, single) {
   return h + "</g>";
 }
 
+// Repère « Vous êtes ici » (coordonnées en cases dans salles.ici_x / ici_y).
+export function iciSVG(salle) {
+  if (salle.ici_x == null || salle.ici_y == null) return "";
+  const ix = salle.ici_x * CELL, iy = salle.ici_y * CELL;
+  return `<g transform="translate(${ix},${iy})" style="pointer-events:none">
+    <circle r="11" fill="#DC2626" stroke="#fff" stroke-width="2"/>
+    <circle r="3.5" fill="#fff"/>
+    <text x="0" y="-15" text-anchor="middle" font-family="var(--font)" font-size="11" font-weight="700" style="fill:#DC2626;paint-order:stroke" stroke="#fff" stroke-width="3">Vous êtes ici</text>
+  </g>`;
+}
+
 export function renderPlan(layer, svg, salle) {
   const W = salle.cols * CELL, H = salle.rows * CELL;
   const els = salleElements(salle.id), single = plan.sel.size === 1;
@@ -80,6 +91,7 @@ export function renderPlan(layer, svg, salle) {
     const bad = tables.some((o) => o !== t && overlap(t, o));
     h += tableSVG(t, plan.sel.has(t.id), single, bad);
   });
+  h += iciSVG(salle);
   h += "</g>";
   layer.innerHTML = h;
   svg.setAttribute("viewBox", `0 0 ${W + 2 * M} ${H + 2 * M}`);

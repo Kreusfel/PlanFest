@@ -147,14 +147,14 @@ function ficheView() {
     <div class="head-actions"><button class="btn" id="back">← Liste</button>
       ${w && b.email && !b.profil_id ? `<button class="btn" id="invite">Inviter</button>` : ""}
       ${w ? `<button class="btn primary" id="save">Enregistrer</button>` : ""}</div></div>
-    <div class="fiche-grid">
-      <div class="card"><h2>Personne</h2>
+    <div class="two">
+      <div class="l card"><h2>Personne</h2>
         ${field("Nom", `<input data-b="nom" value="${esc(b.nom)}"${ro}>`)}
         <div class="row2">${field("E-mail", `<input type="email" data-b="email" value="${esc(b.email || "")}"${ro}>`)}${field("Téléphone", `<input data-b="telephone" value="${esc(b.telephone || "")}"${ro}>`)}</div>
         <span class="chk-inline"><input type="checkbox" data-b="recontacter"${b.recontacter ? " checked" : ""}${ro}> Accepte d'être recontacté l'an prochain</span>
         ${b.profil_id ? `<p class="mini">Compte lié ✓</p>` : `<p class="mini">Pas encore de compte.</p>`}
       </div>
-      <div class="card"><h2>Cette édition</h2>
+      <div class="r"><div class="card"><h2>Cette édition</h2>
         ${field("Équipes", equipesChk(be.equipes, ro))}
         <div class="row2">
           ${field("Statut", `<select data-e="statut"${ro}>${STATUTS.map((s) => `<option value="${s[0]}"${s[0] === be.statut ? " selected" : ""}>${s[1]}</option>`).join("")}</select>`)}
@@ -165,7 +165,7 @@ function ficheView() {
         <label>Disponibilités${disposGrid(ro)}</label>
         ${field("Régime / allergies", `<input data-regime value="${esc(regimeBe)}" placeholder="ex. végétarien, sans gluten…"${ro}>`)}
         ${field("Notes", `<textarea data-e="notes"${ro}>${esc(be.notes || "")}</textarea>`)}
-      </div>
+      </div></div>
     </div>
     <p class="msg" id="b-msg"></p>`;
 }

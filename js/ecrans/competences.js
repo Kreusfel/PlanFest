@@ -6,7 +6,7 @@ import { store } from "../store.js";
 import { esc } from "../ui/util.js";
 
 const NIVEAUX = [["anime", "J'anime", "ok"], ["apprendre", "À apprendre", "amber"], ["non", "Non", "grey"]];
-let root, cats = [], benevoles = [], targetId = null, comps = {};
+let root, cats = [], benevoles = [], targetId = null, comps = {}, myBenevoleId = null;
 
 const gere = () => isAdmin() || hasPole("animateurs_benevoles");
 
@@ -16,14 +16,21 @@ export async function render(container) {
   const c = await supa.from("categories_jeux").select("id,nom,type,ordre").order("ordre");
   cats = c.data ?? [];
   if (gere()) {
-    // Limité aux bénévoles de l'édition courante (évite de lister tout l'historique).
+    // Bénévoles de l'édition courante + soi-même (un admin édite aussi ses propres compétences).
     if (!store.editionId) { root.innerHTML = page(`<div class="card"><p><a class="btn primary" href="#/editions">Choisir une édition</a></p></div>`); return; }
-    const b = await supa.from("benevoles_editions").select("benevole:benevoles(id,nom)").eq("edition_id", store.editionId);
+    const [b, meR] = await Promise.all([
+      supa.from("benevoles_editions").select("benevole:benevoles(id,nom)").eq("edition_id", store.editionId),
+      supa.from("benevoles").select("id,nom").eq("profil_id", session.user.id).maybeSingle(),
+    ]);
     const seen = new Set();
     benevoles = (b.data ?? []).map((x) => x.benevole).filter(Boolean)
       .filter((x) => (seen.has(x.id) ? false : seen.add(x.id)))
       .sort((a, z) => a.nom.localeCompare(z.nom, "fr"));
-    if (!(targetId && benevoles.some((x) => x.id === targetId))) targetId = benevoles[0]?.id || null;
+    const me = meR.data;
+    myBenevoleId = me?.id || null;
+    if (me && !seen.has(me.id)) benevoles.unshift(me); // pas inscrit sur l'édition mais on garde l'accès perso
+    // S'ouvre sur soi-même par défaut.
+    if (!(targetId && benevoles.some((x) => x.id === targetId))) targetId = myBenevoleId || benevoles[0]?.id || null;
   } else {
     const me = await supa.from("benevoles").select("id,nom").eq("profil_id", session.user.id).maybeSingle();
     if (!me.data) { root.innerHTML = page(`<div class="card"><p class="muted">Ton compte n'est pas encore relié à une fiche bénévole. Demande à un responsable de te créer et t'inviter.</p></div>`); return; }
@@ -45,7 +52,7 @@ async function loadComps() {
 }
 
 function draw() {
-  const sel = gere() ? `<label>Bénévole<select id="who">${benevoles.map((b) => `<option value="${b.id}"${b.id === targetId ? " selected" : ""}>${esc(b.nom)}</option>`).join("")}</select></label>` : "";
+  const sel = gere() ? `<label>Bénévole<select id="who">${benevoles.map((b) => `<option value="${b.id}"${b.id === targetId ? " selected" : ""}>${esc(b.nom)}${b.id === myBenevoleId ? " (moi)" : ""}</option>`).join("")}</select></label>` : "";
   const byType = {};
   cats.forEach((c) => { (byType[c.type] = byType[c.type] || []).push(c); });
   const TYPE_LBL = { age: "Âges", niveau: "Niveaux", format: "Formats" };

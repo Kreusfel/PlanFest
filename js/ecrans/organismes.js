@@ -217,8 +217,8 @@ function ficheView() {
     <div class="sub">${(oe.roles || []).map(roleLabel).join(" · ") || "sans rôle"}</div></div>
     <div class="head-actions"><button class="btn" id="back">← Retour</button>
       ${w ? `<button class="btn primary" id="save">Enregistrer</button>` : ""}</div></div>
-    <div class="fiche-grid">
-      <div class="card"><h2>Organisme</h2>
+    <div class="two">
+      <div class="l card"><h2>Organisme</h2>
         ${field("Nom", `<input data-o="nom" value="${esc(o.nom)}"${ro}>`)}
         ${field("Site", `<input data-o="site" value="${esc(o.site || "")}"${ro}>`)}
         <div class="row2">${field("Contact", `<input data-o="contact_nom" value="${esc(o.contact_nom || "")}"${ro}>`)}${field("Téléphone", `<input data-o="contact_tel" value="${esc(o.contact_tel || "")}"${ro}>`)}</div>
@@ -228,7 +228,7 @@ function ficheView() {
         ${field("Notes (organisme)", `<textarea data-o="notes"${ro}>${esc(o.notes || "")}</textarea>`)}
         ${field("", `<span class="chk-inline"><input type="checkbox" data-o="archive"${o.archive ? " checked" : ""}${ro}> Archivé</span>`)}
       </div>
-      <div class="card"><h2>Cette édition</h2>
+      <div class="r"><div class="card"><h2>Cette édition</h2>
         ${field("Rôles", `<div class="poles-pick">${roleChk}</div>`)}
         <div class="row2">
           ${field("Statut", `<select data-e="statut"${ro}>${STATUTS_SAISIE.map((s) => `<option value="${s[0]}"${s[0] === oe.statut ? " selected" : ""}>${s[1]}</option>`).join("")}</select>`)}
@@ -239,18 +239,18 @@ function ficheView() {
         </div>
         <div data-sec="partenaire"${isP ? "" : ' style="display:none"'}>
           <h3>Partenaire</h3>
+          <p class="lbl">Matériel souhaité</p>
           <div class="row3">
-            ${field("Tables souhaitées", `<input type="number" min="0" data-e="tables_souhaitees" value="${oe.tables_souhaitees || 0}"${ro}>`)}
+            ${field("Tables", `<input type="number" min="0" data-e="tables_souhaitees" value="${oe.tables_souhaitees || 0}"${ro}>`)}
             ${field("Chaises", `<input type="number" min="0" data-e="chaises_souhaitees" value="${oe.chaises_souhaitees || 0}"${ro}>`)}
             ${field("Grilles", `<input type="number" min="0" data-e="grilles_souhaitees" value="${oe.grilles_souhaitees || 0}"${ro}>`)}
           </div>
-          <span class="chk-inline"><input type="checkbox" data-e="electricite"${oe.electricite ? " checked" : ""}${ro}> Électricité</span>
+          ${field("", `<span class="chk-inline"><input type="checkbox" data-e="electricite"${oe.electricite ? " checked" : ""}${ro}> Électricité</span>`)}
           ${planBanner(oe)}
           <h3>Personnes présentes</h3>
           ${field("Noms (pour les étiquettes)", `<textarea data-e="noms_personnes" placeholder="Un nom par ligne"${ro}>${esc(oe.noms_personnes || "")}</textarea>`)}
           <div class="row2">${field("Repas samedi", `<input type="number" min="0" data-e="personnes_sam" value="${oe.personnes_sam || 0}"${ro}>`)}${field("Repas dimanche", `<input type="number" min="0" data-e="personnes_dim" value="${oe.personnes_dim || 0}"${ro}>`)}</div>
-          <span class="chk-inline"><input type="checkbox" data-e="convention_recue"${oe.convention_recue ? " checked" : ""}${ro}> Convention reçue</span>
-          <span class="chk-inline"><input type="checkbox" data-e="assurance_recue"${oe.assurance_recue ? " checked" : ""}${ro}> Assurance reçue</span>
+          ${field("", `<div class="chk-row"><span class="chk-inline"><input type="checkbox" data-e="convention_recue"${oe.convention_recue ? " checked" : ""}${ro}> Convention reçue</span><span class="chk-inline"><input type="checkbox" data-e="assurance_recue"${oe.assurance_recue ? " checked" : ""}${ro}> Assurance reçue</span></div>`)}
         </div>
         <div data-sec="sponsor"${isS ? "" : ' style="display:none"'}>
           <h3>Sponsor</h3>
@@ -260,7 +260,7 @@ function ficheView() {
           ${field("Régime / allergies (repas)", `<input data-regime value="${esc(regimes[oe.id] || "")}" placeholder="ex. 1 sans gluten, 2 végétariens…"${ro}>`)}
         </div>
         ${field("Notes (cette édition)", `<textarea data-e="notes"${ro}>${esc(oe.notes || "")}</textarea>`)}
-      </div>
+      </div></div>
     </div>
     <div data-sec="editeur-jeux"${isE ? "" : ' style="display:none"'}>${editeurJeuxBlock(oe)}</div>
     <p class="mini" style="margin-top:14px">La couleur sur le plan n'apparaît que si le rôle Partenaire est coché.</p>

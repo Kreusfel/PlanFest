@@ -4,16 +4,16 @@ import { supa } from "../supabase.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
 import { esc, plur } from "../ui/util.js";
+import * as swipe from "./selection-swipe.js";
 
 const STATUTS = [["souhaite", "Souhaité"], ["demande", "Demandé"], ["recu", "Reçu"], ["deja_asso", "Déjà à l'asso"]];
 const STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso: "blue" };
 const USAGES = [["animation", "Animation"], ["tombola", "Tombola"]];
-const TARGET_RECUS = 50;
 const BGG = `<p class="mini bgg-foot">Données et images : <a href="https://boardgamegeek.com" target="_blank" rel="noopener">Powered by BGG</a></p>`;
 
 let root, list = [], cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = [], loadErr = "";
 let filt = { q: "", statut: "", categorie: "", editeur: "", sansAnim: false };
-let view = { mode: "list", id: null };
+let view = { mode: "list", id: null, tab: "editeurs" };
 let bggResults = null, bggMsg = "";
 
 const stLabel = (k) => (STATUTS.find((s) => s[0] === k) || [k, k])[1];
@@ -25,10 +25,10 @@ const canWrite = () => isAdmin() || hasPole("jeux_editeurs");
 
 export async function render(container, sub) {
   root = container;
-  view = { mode: "list", id: null };
+  view = { mode: "list", id: null, tab: "editeurs" };
   filt.editeur = sub || "";
   if (!store.editionId) {
-    root.innerHTML = `<div class="page-head"><div><h1>Jeux</h1><div class="sub">Aucune édition sélectionnée</div></div></div>
+    root.innerHTML = `<div class="page-head"><div><h1>Sélection Jeux</h1><div class="sub">Aucune édition sélectionnée</div></div></div>
       <div class="card"><p><a class="btn primary" href="#/editions">Choisir une édition</a></p></div>`;
     return;
   }
@@ -83,6 +83,10 @@ function go() {
     : view.mode === "bgg" ? bggView()
     : view.mode === "manual" ? manualView()
     : listView();
+  if (view.mode === "list" && view.tab === "ludo") {
+    const mount = root.querySelector("#ludo-mount");
+    if (mount) swipe.render(mount);
+  }
 }
 
 /* ---------- grille ---------- */
@@ -121,10 +125,14 @@ function listView() {
   const cOpts = `<option value="">Toutes catégories</option>` + cats.map((c) => `<option value="${c.id}"${filt.categorie === c.id ? " selected" : ""}>${esc(c.nom)}</option>`).join("");
   const eIds = [...new Set(list.map((x) => x.jeux.editeur_id).filter(Boolean))];
   const eOpts = `<option value="">Tous éditeurs</option>` + eIds.map((id) => `<option value="${id}"${filt.editeur === id ? " selected" : ""}>${esc(orgNom(id))}</option>`).join("");
-  return `<div class="page-head"><div><h1>Jeux</h1>
-    <div class="sub">${plur(list.length, "jeu", "jeux")} · <b>${nr} reçus sur ${TARGET_RECUS}</b> · ${plur(nd, "demandé", "demandés")} · ${nsa} sans animateur</div></div>
-    <div class="head-actions">${canWrite() ? `<button class="btn primary" id="new-jeu">+ Ajouter un jeu</button>` : ""}</div></div>
-    <div class="card">
+  const tabs = `<div class="utabs">
+    <button data-tab="editeurs"${view.tab === "editeurs" ? ' class="on"' : ""}>Demandés &amp; reçus</button>
+    <button data-tab="ludo"${view.tab === "ludo" ? ' class="on"' : ""}>Trier la ludothèque</button></div>`;
+  const head = `<div class="page-head"><div><h1>Sélection Jeux</h1>
+    <div class="sub">${plur(nr, "reçu", "reçus")} · ${plur(nd, "demandé", "demandés")} · ${nsa} sans animateur</div></div>
+    <div class="head-actions">${canWrite() && view.tab === "editeurs" ? `<button class="btn primary" id="new-jeu">+ Ajouter un jeu</button>` : ""}</div></div>`;
+  if (view.tab === "ludo") return head + tabs + `<div id="ludo-mount"></div>`;
+  return head + tabs + `<div class="card">
       <div class="jeux-filters">
         <input id="f-q" placeholder="Rechercher un titre…" value="${esc(filt.q)}">
         <select id="f-statut">${sOpts}</select>
@@ -207,8 +215,8 @@ function ficheView() {
   return `<div class="page-head"><div><h1>${esc(j.titre)}</h1>
     <div class="sub">${esc(catNom(j.categorie_id))}${j.editeur_id ? " · " + esc(orgNom(j.editeur_id)) : ""}</div></div>
     <div class="head-actions"><button class="btn" id="back">← Liste</button>${w ? `<button class="btn primary" id="save">Enregistrer</button>` : ""}</div></div>
-    <div class="fiche-grid">
-      <div class="card"><h2>Jeu</h2>
+    <div class="two">
+      <div class="l card"><h2>Jeu</h2>
         <div class="jeu-fiche-top">
           <div class="jeu-img sm">${img ? `<img src="${esc(img)}" alt="">` : `<span>Image BGG</span>`}</div>
           <div class="jeu-fiche-meta">
@@ -222,9 +230,10 @@ function ficheView() {
         <label>Éditeur<div class="with-link">${editeurSel(j.editeur_id, "data-j")}${j.editeur_id ? `<a class="link" href="#/organismes/editeurs">Voir la fiche</a>` : ""}</div></label>
         <div class="row2">${f("Joueurs min", `<input type="number" data-j="joueurs_min" value="${j.joueurs_min ?? ""}"${ro}>`)}${f("Joueurs max", `<input type="number" data-j="joueurs_max" value="${j.joueurs_max ?? ""}"${ro}>`)}</div>
         <div class="row2">${f("Durée (min)", `<input type="number" data-j="duree_min" value="${j.duree_min ?? ""}"${ro}>`)}${f("Âge min", `<input type="number" data-j="age_min" value="${j.age_min ?? ""}"${ro}>`)}</div>
+        <label>Ludothèque<div class="chk-row"><span class="chk-inline"><input type="checkbox" data-jbool="ludotheque"${j.ludotheque ? " checked" : ""}${ro}> Jeu de l'asso (apparaît dans le triage Ludothèque)</span></div></label>
         ${BGG}
       </div>
-      <div class="fiche-col">
+      <div class="r">
         <div class="card"><h2>Cette édition</h2>
           <div class="row2">${f("Statut", `<select data-e="statut"${ro}>${STATUTS.map((s) => `<option value="${s[0]}"${s[0] === je.statut ? " selected" : ""}>${s[1]}</option>`).join("")}</select>`)}${f("Exemplaires", `<input type="number" min="1" data-e="exemplaires" value="${je.exemplaires ?? 1}"${ro}>`)}</div>
           <label>Usages<div class="chk-row">${USAGES.map(([k, l]) => `<span class="chk-inline"><input type="checkbox" data-usage="${k}"${(je.usages || []).includes(k) ? " checked" : ""}${ro}> ${l}</span>`).join("")}</div></label>
@@ -250,8 +259,10 @@ function wireOnce() {
 }
 async function onClick(e) {
   const t = e.target;
+  const tab = t.closest("[data-tab]");
+  if (tab) { view = { mode: "list", id: null, tab: tab.dataset.tab }; return go(); }
   if (t.closest("#new-jeu")) { bggResults = null; bggMsg = ""; view = { mode: "bgg", id: null }; return go(); }
-  if (t.closest("#back")) { view = { mode: "list", id: null }; return go(); }
+  if (t.closest("#back")) { view = { mode: "list", id: null, tab: "editeurs" }; return go(); }
   if (t.closest("#to-manual")) { view = { mode: "manual", id: null }; return go(); }
   if (t.closest("#to-bgg")) { bggResults = null; bggMsg = ""; view = { mode: "bgg", id: null }; return go(); }
   if (t.closest("#bgg-search")) return bggSearch();
@@ -284,8 +295,10 @@ async function bggSearch() {
   if (!q.trim()) { if (msg) msg.textContent = "Saisis un nom de jeu."; return; }
   if (msg) msg.textContent = "Recherche…";
   const { data, error } = await supa.functions.invoke("bgg-import", { body: { action: "search", query: q } });
-  if (error || data?.error) { bggMsg = "BGG indisponible (fonction non déployée ?). Utilise « Saisir à la main »."; bggResults = []; go(); return; }
-  bggResults = data?.results ?? []; bggMsg = "";
+  if (error || data?.error) { bggMsg = "BGG indisponible pour le moment. Utilise « Saisir à la main »."; bggResults = []; go(); return; }
+  bggResults = data?.results ?? [];
+  bggMsg = bggResults.length ? ""
+    : "Aucun résultat — l'API BoardGameGeek restreint actuellement l'accès depuis les serveurs. Utilise « Saisir à la main ».";
   go();
 }
 async function importBgg(r) {
@@ -344,7 +357,8 @@ async function saveFiche() {
   const jPatch = { titre, annee: numOrNull(g("annee").value),
     joueurs_min: numOrNull(g("joueurs_min").value), joueurs_max: numOrNull(g("joueurs_max").value),
     duree_min: numOrNull(g("duree_min").value), age_min: numOrNull(g("age_min").value),
-    categorie_id: g("categorie_id").value || null, editeur_id: g("editeur_id").value || null };
+    categorie_id: g("categorie_id").value || null, editeur_id: g("editeur_id").value || null,
+    ludotheque: !!root.querySelector('[data-jbool="ludotheque"]')?.checked };
   const usages = [...root.querySelectorAll("[data-usage]")].filter((c) => c.checked).map((c) => c.dataset.usage);
   const ePatch = { statut: e("statut").value, exemplaires: numOrNull(e("exemplaires").value) || 1,
     usages: usages.length ? usages : ["animation"], element_id: e("element_id").value || null,

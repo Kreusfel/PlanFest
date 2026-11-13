@@ -2,6 +2,7 @@
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
 import { esc } from "../ui/util.js";
+import { session, isAdmin } from "../auth.js";
 
 const POLE_TITRE = {
   partenaires: "Partenaires", jeux_editeurs: "Jeux et éditeurs", sponsors: "Sponsors",
@@ -87,18 +88,40 @@ function tile(key, val) {
   return `<div class="kpi ${cls}"><div class="kpi-val">${esc(String(disp))}</div><div class="kpi-lbl">${esc(label)}</div></div>`;
 }
 
+// Pôles dont les « relances organismes » font partie du périmètre.
+const POLES_CONTACT = new Set(["partenaires", "jeux_editeurs", "sponsors", "communication"]);
+
+function poleCard(data, k) {
+  const tiles = Object.entries(data[k]).map(([kk, vv]) => tile(kk, vv)).join("");
+  return `<div class="card">
+    <div class="dash-head"><h2>${esc(POLE_TITRE[k])}</h2>
+      <a class="link" href="${POLE_LIEN[k]}">Ouvrir →</a></div>
+    <div class="kpis">${tiles}</div></div>`;
+}
+
 function draw(data, relances) {
-  const keys = Object.keys(POLE_TITRE).filter((k) => data[k]);
-  const cards = keys.map((k) => {
-    const tiles = Object.entries(data[k]).map(([kk, vv]) => tile(kk, vv)).join("");
-    return `<div class="card">
-      <div class="dash-head"><h2>${esc(POLE_TITRE[k])}</h2>
-        <a class="link" href="${POLE_LIEN[k]}">Ouvrir →</a></div>
-      <div class="kpis">${tiles}</div></div>`;
-  }).join("") || `<div class="card"><p class="muted">Aucun indicateur pour tes pôles.</p></div>`;
+  const allKeys = Object.keys(POLE_TITRE).filter((k) => data[k]);
+  // Pour un responsable (hors admin), on met SES pôles en avant ; le reste en secondaire.
+  const mine = isAdmin() ? [] : allKeys.filter((k) => session.poles.includes(k));
+  const rest = allKeys.filter((k) => !mine.includes(k));
   const relCard = (relances && relances.length) ? relancesCard(relances) : "";
-  root.innerHTML = `<div class="page-head"><div><h1>Tableau de bord</h1>
-    <div class="sub">Vue d'ensemble de l'édition courante</div></div></div>
-    ${relCard}
-    <div class="dash-grid">${cards}</div>`;
+  const relInMine = isAdmin() || !mine.length || mine.some((k) => POLES_CONTACT.has(k));
+
+  let html = `<div class="page-head"><div><h1>Tableau de bord</h1>
+    <div class="sub">Vue d'ensemble de l'édition courante</div></div></div>`;
+
+  if (mine.length) {
+    html += `<section class="dash-section">
+      <h2 class="sect-title">Mon pôle</h2>
+      ${relInMine ? relCard : ""}
+      <div class="dash-grid">${mine.map((k) => poleCard(data, k)).join("")}</div></section>`;
+    const restBody = `${relInMine ? "" : relCard}<div class="dash-grid">${rest.map((k) => poleCard(data, k)).join("")}</div>`;
+    if (rest.length || !relInMine) {
+      html += `<details class="dash-secondary"><summary>Reste du festival${rest.length ? ` · ${rest.length} pôle${rest.length > 1 ? "s" : ""}` : ""}</summary>
+        <div class="dash-secondary-body">${restBody}</div></details>`;
+    }
+  } else {
+    html += relCard + `<div class="dash-grid">${allKeys.map((k) => poleCard(data, k)).join("") || `<div class="card"><p class="muted">Aucun indicateur pour cette édition.</p></div>`}</div>`;
+  }
+  root.innerHTML = html;
 }

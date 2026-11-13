@@ -42,8 +42,19 @@ function parseItem(itemXml: string) {
     miniature_url: tagText(itemXml, "thumbnail"),
   };
 }
-const fetchText = (url: string) =>
-  fetch(url, { headers: { "User-Agent": "PlanFest/1.0" } }).then((r) => r.text());
+// BGG renvoie parfois 202 (requête en file) ou 429/503 (débit) : on réessaie avec un backoff.
+async function fetchText(url: string, tries = 4): Promise<string> {
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(url, { headers: { "User-Agent": "PlanFest/1.0 (festival tool)" } });
+    if (r.status === 200) return await r.text();
+    if (r.status === 202 || r.status === 429 || r.status === 503) {
+      await new Promise((res) => setTimeout(res, 700 * (i + 1)));
+      continue;
+    }
+    return await r.text(); // autre statut : renvoyer le corps (souvent vide)
+  }
+  return "";
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });

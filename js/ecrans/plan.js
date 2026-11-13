@@ -3,7 +3,8 @@ import { supa } from "../supabase.js";
 import { store } from "../store.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { esc } from "../ui/util.js";
-import { plan, loadPlan, curSalle, maxNumero, freeSpot } from "../plan/model.js";
+import { plan, loadPlan, curSalle, salleElements, maxNumero, freeSpot } from "../plan/model.js";
+import { exportPlanPdf, exportPlanPng } from "../export/plan-pdf.js";
 import { CELL, M, BLOCS, renderPlan } from "../plan/render.js";
 import { markUpsert, markDelete, onStatus, onReload, flushNow } from "../plan/autosave.js";
 import { initHistory, recordHistory, undo, redo, canUndo, canRedo } from "../plan/history.js";
@@ -62,17 +63,21 @@ function buildShell() {
         <span class="save" id="cb-save"></span>
         ${editable ? `<button class="btn small" id="btn-undo" title="Annuler (Ctrl+Z)">Annuler</button>
         <button class="btn small" id="btn-redo" title="Refaire (Ctrl+Maj+Z)">Refaire</button>` : ""}
-        <button class="btn small" disabled title="Bientôt">Exporter PDF</button>
+        <span class="exp-group">
+          <select class="exp-mode" id="exp-mode" title="Contenu de l'export"><option value="numeros">Numéros</option><option value="noms">Noms</option><option value="couleurs">Couleurs</option></select>
+          <button class="btn small" id="exp-pdf">PDF</button>
+          <button class="btn small" id="exp-png">PNG</button>
+        </span>
       </div>
     </div>
     <nav class="tabs salles" id="tabs"></nav>
-    <div class="planbody">
+    <div class="planbody${editable ? "" : " readonly"}">
       ${editable ? `<aside class="palette card">
         <p class="lbl">Ajouter</p>
         <button class="btn block" data-act="add-table">Une table</button>
         <div class="inline"><input id="row-n" type="number" min="1" max="40" value="6">
-          <select id="row-dir"><option value="h">en ligne</option><option value="v">en colonne</option></select></div>
-        <button class="btn block" data-act="add-row">Rangée de tables</button>
+          <select id="row-dir"><option value="h">Ligne</option><option value="v">Colonne</option></select></div>
+        <button class="btn block" data-act="add-row">Ajouter la rangée</button>
         <p class="lbl">Repère</p>
         <select id="bloc-type">${blocOpts}</select>
         <button class="btn block" data-act="add-bloc">Ajouter le repère</button>
@@ -117,6 +122,14 @@ function buildShell() {
   }
   root.querySelector(".canvasbar").addEventListener("click", onZoom);
   document.getElementById("tabs").addEventListener("click", onTabs);
+  const expMode = () => document.getElementById("exp-mode")?.value || "numeros";
+  document.getElementById("exp-pdf").onclick = async (e) => {
+    e.target.disabled = true; try { await exportPlanPdf(store.editionId, plan.salles, salleElements, expMode()); } catch (_) { /* ignore */ } e.target.disabled = false;
+  };
+  document.getElementById("exp-png").onclick = async (e) => {
+    const s = curSalle(); if (!s) return;
+    e.target.disabled = true; try { await exportPlanPng(store.editionId, s, salleElements(s.id), expMode()); } catch (_) { /* ignore */ } e.target.disabled = false;
+  };
   renderTabs(); renderCanvas(); renderInspector(); renderStatus("saved");
   if (window.ResizeObserver) { ro = new ResizeObserver(applyScale); ro.observe(document.getElementById("canvas")); }
 }
@@ -189,7 +202,7 @@ function fiche(o) {
           field("Catégorie", `<select data-f="categorie_id"><option value="">—</option>${cats}</select>`)
         : "") +
       `<div class="row2">${field("Largeur (cases)", `<input type="number" min="1" data-f="w" value="${o.w}">`)}${field("Hauteur (cases)", `<input type="number" min="1" data-f="h" value="${o.h}">`)}</div>` +
-      `<div class="actions"><button class="btn" data-act="rot">Pivoter</button><button class="btn danger" data-act="del">Supprimer</button></div>`;
+      `<div class="actions"><button class="btn" data-act="dup">Dupliquer</button><button class="btn" data-act="rot">Pivoter</button><button class="btn danger" data-act="del">Supprimer</button></div>`;
   }
   const cfg = BLOCS[o.sous] || BLOCS.autre;
   const head = `<div class="ihead"><h3>${esc(o.label || cfg.label)}</h3><div class="pills"><span class="pill grey">Repère</span></div></div>`;
@@ -198,7 +211,7 @@ function fiche(o) {
     field("Type", `<select data-f="sous">${Object.keys(BLOCS).map((k) => `<option value="${k}"${k === o.sous ? " selected" : ""}>${esc(BLOCS[k].label)}</option>`).join("")}</select>`) +
     field("Libellé", `<input data-f="label" value="${esc(o.label ?? "")}">`) +
     `<div class="row2">${field("Largeur (cases)", `<input type="number" min="1" data-f="w" value="${o.w}">`)}${field("Hauteur (cases)", `<input type="number" min="1" data-f="h" value="${o.h}">`)}</div>` +
-    `<div class="actions"><button class="btn" data-act="rot">Pivoter</button><button class="btn danger" data-act="del">Supprimer</button></div>`;
+    `<div class="actions"><button class="btn" data-act="dup">Dupliquer</button><button class="btn" data-act="rot">Pivoter</button><button class="btn danger" data-act="del">Supprimer</button></div>`;
 }
 function salleFiche() {
   const s = curSalle();
@@ -207,6 +220,10 @@ function salleFiche() {
   return `<div class="ihead"><h3>Salle</h3></div>` +
     field("Nom", `<input data-sf="nom" value="${esc(s.nom)}">`) +
     `<div class="row2">${field("Largeur (m)", `<input type="number" min="4" max="80" data-sf="cols" value="${s.cols}">`)}${field("Longueur (m)", `<input type="number" min="4" max="80" data-sf="rows" value="${s.rows}">`)}</div>` +
+    (s.ici_x == null
+      ? `<button class="btn block${placingIci ? " primary" : ""}" data-act="place-ici">${placingIci ? "Cliquez sur le plan…" : "Placer « Vous êtes ici »"}</button>`
+      : `<div class="row2"><button class="btn${placingIci ? " primary" : ""}" data-act="place-ici">${placingIci ? "Cliquez…" : "Déplacer le repère"}</button><button class="btn danger" data-act="clear-ici">Retirer</button></div>`) +
+    `<button class="btn block" data-act="rot-salle" title="Échange largeur et longueur, pivote tout le contenu">Pivoter la salle 90°</button>` +
     (plan.salles.length > 1 ? `<button class="btn danger block" data-act="del-salle">Supprimer la salle</button>` : "");
 }
 
@@ -288,10 +305,47 @@ function wireInspector() {
   });
   insp.addEventListener("click", (e) => {
     const b = e.target.closest("[data-act]"); if (!b) return;
-    if (b.dataset.act === "rot") rotate();
+    if (b.dataset.act === "dup") dup();
+    else if (b.dataset.act === "rot") rotate();
     else if (b.dataset.act === "del") del();
     else if (b.dataset.act === "del-salle") delSalle();
+    else if (b.dataset.act === "place-ici") { placingIci = !placingIci; renderInspector(); }
+    else if (b.dataset.act === "clear-ici") setIci(null, null);
+    else if (b.dataset.act === "rot-salle") rotateSalle();
   });
+}
+// Pivote toute la salle de 90° horaire : échange cols/rows et repositionne chaque élément.
+async function rotateSalle() {
+  const s = curSalle(); if (!s) return;
+  const oldRows = s.rows;
+  salleElements(s.id).forEach((o) => {
+    const nx = oldRows - o.y - o.h, ny = o.x, nw = o.h, nh = o.w;
+    o.x = Math.max(0, nx); o.y = ny; o.w = nw; o.h = nh; markUpsert(o);
+  });
+  const nc = s.rows; s.rows = s.cols; s.cols = nc;
+  if (s.ici_x != null && s.ici_y != null) { const nix = oldRows - s.ici_y; s.ici_y = s.ici_x; s.ici_x = nix; }
+  afterEdit(); renderTabs(); renderCanvas(); renderInspector();
+  const { error } = await supa.from("salles").update({ cols: s.cols, rows: s.rows, ici_x: s.ici_x, ici_y: s.ici_y }).eq("id", s.id);
+  renderStatus(error ? "err" : "saved");
+}
+async function setIci(x, y) {
+  const s = curSalle(); if (!s) return;
+  s.ici_x = x; s.ici_y = y; placingIci = false;
+  renderCanvas(); renderInspector();
+  const { error } = await supa.from("salles").update({ ici_x: x, ici_y: y }).eq("id", s.id);
+  renderStatus(error ? "err" : "saved");
+}
+function dup() {
+  const s = curSalle(); if (!s) return;
+  const made = [];
+  selItems().forEach((o) => {
+    const pos = freeSpot(s, o.w, o.h);
+    const copy = newEl({ ...o, id: crypto.randomUUID(), version: 0, x: pos.x, y: pos.y });
+    if (copy.kind === "table") copy.numero = String(maxNumero() + 1);
+    plan.elements.set(copy.id, copy); markUpsert(copy); made.push(copy.id);
+  });
+  if (!made.length) return;
+  plan.sel = new Set(made); afterEdit(); renderTabs(); renderCanvas(); renderInspector();
 }
 async function saveSalle(f, v) {
   const s = curSalle(); if (!s) return;
@@ -332,9 +386,15 @@ function toCells(e) {
   const q = pt.matrixTransform(svg.getScreenCTM().inverse());
   return { x: (q.x - M) / CELL, y: (q.y - M) / CELL };
 }
-let drag = null, raf = false;
+let drag = null, raf = false, placingIci = false;
 function sched() { if (raf) return; raf = true; requestAnimationFrame(() => { raf = false; renderCanvas(); }); }
 function onDown(e) {
+  if (placingIci) {
+    const s = curSalle(); if (!s) { placingIci = false; return; }
+    const p = toCells(e);
+    setIci(clamp(Math.round(p.x * 10) / 10, 0, s.cols), clamp(Math.round(p.y * 10) / 10, 0, s.rows));
+    e.preventDefault(); return;
+  }
   const g = e.target.closest("[data-id]");
   if (!g) { if (plan.sel.size) { plan.sel.clear(); renderCanvas(); renderInspector(); } return; }
   const id = g.getAttribute("data-id"), o = plan.elements.get(id); if (!o) return;

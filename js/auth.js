@@ -15,6 +15,21 @@ export async function refreshSession() {
   }
 }
 
+// --- Simulation dev : tester la vue « responsable de pôle » sans toucher la base ---
+// Activer (console du navigateur) :  localStorage.setItem('pf_sim_pole','partenaires')
+//   puis recharger. Plusieurs pôles : 'partenaires,sponsors'. Désactiver :
+//   localStorage.removeItem('pf_sim_pole'). N'affecte QUE l'affichage ; l'écriture
+// reste régie par ton vrai rôle (RLS). Codes : partenaires, jeux_editeurs,
+// animateurs_benevoles, buvette_catering, communication, sponsors,
+// logistique_securite, intergenerationnelle.
+export function simPoles() {
+  try {
+    const v = localStorage.getItem("pf_sim_pole");
+    return v ? v.split(",").map((s) => s.trim()).filter(Boolean) : null;
+  } catch { return null; }
+}
+export function isSimulating() { return !!simPoles(); }
+
 async function loadProfil() {
   const { data: p } = await supa
     .from("profils").select("*").eq("id", session.user.id).maybeSingle();
@@ -22,9 +37,11 @@ async function loadProfil() {
   const { data: rp } = await supa
     .from("responsables_pole").select("poles(code)").eq("profil_id", session.user.id);
   session.poles = (rp ?? []).map((r) => r.poles?.code).filter(Boolean);
+  const sim = simPoles();
+  if (sim) session.poles = sim; // override d'affichage pour le test
 }
 
-export function isAdmin() { return session.profil?.role === "admin"; }
+export function isAdmin() { return !simPoles() && session.profil?.role === "admin"; }
 export function isActif() { return !!session.profil?.actif; }
 export function hasPole(code) { return isAdmin() || session.poles.includes(code); }
 
