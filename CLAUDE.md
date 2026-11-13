@@ -40,7 +40,7 @@ projet : les respecter dans chaque session.
 ## Base de données
 
 - Migrations numérotées `NNN_nom.sql`, **jamais modifier une migration déjà appliquée** :
-  en créer une nouvelle. Prochaine : `034_…`.
+  en créer une nouvelle. Prochaine : `035_…`.
 - `create or replace function` ne peut pas changer le type de retour : `drop function`
   d'abord. Pour une policy : `drop policy if exists` puis `create policy`.
 - Avant de redéfinir une fonction ou une policy, chercher sa **dernière** définition
@@ -73,4 +73,6 @@ projet : les respecter dans chaque session.
 - Toujours traiter `error` des appels Supabase (`const { data, error } = …`) et
   l'afficher ; ne jamais faire comme si l'opération avait réussi.
 - Dates « du jour » : `aujourdhui()` (heure locale), jamais `toISOString().slice(0,10)`.
-- Réutiliser `js/ui/util.js` avant d'écrire un nouvel utilitaire.
+- Réutiliser `js/ui/util.js` (et `js/ui/csv.js`) avant d'écrire un nouvel utilitaire.
+- Téléphone : la consultation passe par `js/ecrans/terrain.js` (lecture seule, données
+  de la RPC `terrain()`) ; pour afficher un plan en lecture, `js/plan/svg-lecture.js`.

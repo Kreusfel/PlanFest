@@ -30,15 +30,25 @@ js/auth.js          session, profil, rôles ; invitations ; mot de passe
 js/store.js         édition courante
 js/ecrans/          un fichier par écran (render / unmount)
 js/public/          pages publiques sans compte (programme, plan, exposants, inscription)
-js/plan/            éditeur de plan : modèle, rendu SVG, annuler/refaire, autosave, temps réel
+js/plan/            éditeur de plan (modèle, rendu, annuler/refaire, autosave, temps réel)
+                    + svg-lecture.js : plan en lecture seule (page publique, « Sur le terrain »)
 js/export/          PDF (plan, montage, étiquettes, fiches, permanences), QR codes
 js/offline/         files IndexedDB du jour J
 js/ui/util.js       utilitaires partagés (esc, safeUrl, toast, dates…)
-supabase/migrations 001 → 033, à exécuter dans l'ordre
+supabase/migrations 001 → 034, à exécuter dans l'ordre
 supabase/functions  Edge Functions : inviter, bgg-import
 supabase/seed_demo.sql  données fictives de démonstration (facultatif)
 docs/archive/       ancien brief et maquette d'origine (historique, non utilisés)
 ```
+
+## Sur téléphone
+
+L'écran **« Sur le terrain »** (`#/terrain`, ouvert par défaut sur téléphone) sert à
+consulter le jour J, en lecture seule : **Mon planning** (mes parties et mes
+permanences, « en cours » / « ensuite »), **Programme** (recherche, en cours et à venir)
+et **Plan** (recherche d'une table, détail de ce qui s'y passe). Les données viennent
+d'un seul appel (`terrain()`, migration 034) et restent consultables hors ligne.
+Les écrans d'édition sont faits pour l'ordinateur.
 
 ## Comptes et droits
 
@@ -66,7 +76,7 @@ Pour que les liens des e-mails (invitation, mot de passe) reviennent en local, a
 ## Installer un projet Supabase
 
 1. **Migrations** : SQL Editor → exécuter `supabase/migrations/001_socle.sql` à
-   `033_rgpd_vague4.sql`, **dans l'ordre**, une seule fois chacune (elles ne sont pas
+   `034_terrain.sql`, **dans l'ordre**, une seule fois chacune (elles ne sont pas
    toutes rejouables). Le premier compte admin se crée à la main (Authentication → Users,
    puis `update profils set role = 'admin', actif = true where email = '…'`).
 2. **Edge Functions** (Edge Functions → Deploy a new function → Via Editor, ou
