@@ -5,7 +5,7 @@
 //    logos d'organismes à récupérer.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, refocus } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { qrSVG } from "../export/qr.js";
 
@@ -143,7 +143,7 @@ function publicTab() {
 function wire() {
   root.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; mode = "list"; draw(); }));
   // diffusion
-  const s = root.querySelector("#f-q"); if (s) s.oninput = () => { q = s.value; const t = root.querySelector("tbody"); if (t) draw(); };
+  const s = root.querySelector("#f-q"); if (s) s.oninput = () => { q = s.value; const pos = s.selectionStart; draw(); refocus(root, "#f-q", pos); };
   const ft = root.querySelector("#f-type"); if (ft) ft.onchange = () => { filtType = ft.value; draw(); };
   const cp = root.querySelector("#copy-mails"); if (cp) cp.onclick = copyMails;
   const ic = root.querySelector("#imp-csv"); if (ic) ic.onclick = () => { csvMsg = ""; mode = "csv"; draw(); };

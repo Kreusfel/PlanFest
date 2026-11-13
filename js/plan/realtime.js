@@ -44,6 +44,9 @@ function applySalle(p) {
   }
   const row = p.new; if (!row) return false;
   const i = plan.salles.findIndex((s) => s.id === row.id);
+  // Écho de notre propre écriture (rien de neuf) : ignorer, sinon l'historique
+  // d'annulation serait vidé à chaque modif locale de salle.
+  if (i >= 0 && ["nom", "cols", "rows", "ici_x", "ici_y"].every((k) => (plan.salles[i][k] ?? null) === (row[k] ?? null))) return false;
   if (i < 0) plan.salles.push(row); else plan.salles[i] = row;
   return true;
 }

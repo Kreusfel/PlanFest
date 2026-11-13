@@ -3,7 +3,7 @@
 import { supa } from "../supabase.js";
 import { session, isAdmin, sendInvitation } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur } from "../ui/util.js";
+import { esc, plur, aujourdhui } from "../ui/util.js";
 import { exportMontage } from "../export/montage.js";
 import { exportEtiquettes } from "../export/etiquettes.js";
 import { exportFiches } from "../export/fiches.js";
@@ -196,7 +196,7 @@ async function pdfExport(fn) {
 }
 async function figer() {
   const msg = document.getElementById("v-msg");
-  const nom = prompt("Nom de la version ?", "Plan " + new Date().toISOString().slice(0, 10));
+  const nom = prompt("Nom de la version ?", "Plan " + aujourdhui());
   if (!nom) return;
   if (msg) msg.textContent = "Figement…";
   const { error } = await supa.rpc("figer_plan", { p_edition: store.editionId, p_nom: nom });
@@ -204,7 +204,15 @@ async function figer() {
   await reload();
 }
 async function restaurer(id) {
-  if (!confirm("Restaurer cette version ? Le plan actuel de l'édition sera remplacé.")) return;
+  // Annoncer ce qui serait perdu : les parties des tables absentes de la version.
+  const imp = await supa.rpc("restauration_impact", { p_version: id });
+  if (imp.error) { alert("Erreur : " + imp.error.message); return; }
+  const { tables_retirees: t = 0, parties_perdues: p = 0 } = imp.data?.[0] ?? {};
+  let txt = "Restaurer cette version ? Le plan actuel de l'édition sera remplacé.";
+  if (t) txt += `\n\n${t} élément(s) du plan actuel n'existe(nt) pas dans cette version et seront retirés`
+    + (p ? `, avec ${p} partie(s) programmée(s) et leurs inscriptions.` : ".");
+  else txt += "\n\nLes parties programmées sont conservées.";
+  if (!confirm(txt)) return;
   const { error } = await supa.rpc("restaurer_plan", { p_version: id });
   if (error) { alert("Erreur : " + error.message); return; }
   alert("Plan restauré. Rouvre « Plan des salles » pour le voir.");

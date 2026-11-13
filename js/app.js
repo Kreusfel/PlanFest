@@ -135,11 +135,20 @@ function buildNav(path) {
 
 function currentPath() { return (location.hash.replace(/^#/, "") || "/").split("?")[0]; }
 
+// Écran affiché : son unmount() éventuel est appelé avant d'en afficher un autre
+// (retire écouteurs globaux, temps réel… — ex. le plan et ses raccourcis clavier).
+let currentScreen = null;
+function leaveScreen() {
+  try { currentScreen?.unmount?.(); } catch (e) { console.error(e); }
+  currentScreen = null;
+}
+
 let choixMotDePasse = lienEmail.type === "invite" || lienEmail.type === "recovery";
 
 function render() {
   const path = currentPath();
-  if (path.startsWith("/public")) { renderPublic(path); return; }
+  if (path.startsWith("/public")) { leaveScreen(); renderPublic(path); return; }
+  if (!session.user || choixMotDePasse || !isActif()) leaveScreen();
   if (!session.user) { app.innerHTML = ""; connexion.render(app, lienEmail.erreur); lienEmail.erreur = null; return; }
   // Arrivée par un lien d'invitation ou « mot de passe oublié » : choisir son mot de passe.
   if (choixMotDePasse) {
@@ -214,7 +223,9 @@ function renderShell() {
   };
   const sel = document.getElementById("ed-select");
   if (sel) sel.onchange = () => { setEdition(sel.value); renderShell(); };
-  SCREENS[path].render(document.getElementById("view"), sub);
+  leaveScreen();
+  currentScreen = SCREENS[path];
+  currentScreen.render(document.getElementById("view"), sub);
   if (!editionsList.length) loadEditions();
 }
 
@@ -239,7 +250,15 @@ async function boot() {
   // Retirer les jetons ou l'erreur du lien e-mail de la barre d'adresse.
   if (lienEmail.type || lienEmail.erreur) history.replaceState(null, "", location.pathname + location.search);
   render();
-  onAuth(async () => { await refreshSession(); render(); });
+  // Ne ré-afficher que si l'utilisateur change (connexion, déconnexion, autre compte).
+  // Le renouvellement du jeton (~ toutes les heures) ne doit pas refaire l'écran :
+  // ça effaçait la saisie en cours et l'historique d'annulation du plan.
+  onAuth(async (event) => {
+    if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") return;
+    const avant = session.user?.id ?? null;
+    await refreshSession();
+    if ((session.user?.id ?? null) !== avant || event === "SIGNED_OUT") render();
+  });
   window.addEventListener("hashchange", () => {
     const path = currentPath();
     if (path.startsWith("/public")) renderPublic(path);

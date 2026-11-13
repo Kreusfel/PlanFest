@@ -4,7 +4,7 @@
 import { supa } from "../supabase.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur } from "../ui/util.js";
+import { esc, plur, aujourdhui } from "../ui/util.js";
 
 const ROLES = [["partenaire", "Partenaire"], ["editeur", "Éditeur"], ["sponsor", "Sponsor"]];
 const STATUTS = [["invite", "À contacter"], ["relance", "À relancer"], ["confirme", "Confirmé"], ["refuse", "Refusé"]];
@@ -19,7 +19,7 @@ const JE_STATUT_LBL = { souhaite: "Souhaité", demande: "Demandé", recu: "Reçu
 const JE_STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso: "blue" };
 const JE_USAGE_LBL = { animation: "Animation", tournoi: "Tournoi", tombola: "Tombola" };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = aujourdhui;
 
 let root, list = [], regimes = {}, jeuxEd = {}, catalogue = [], placedTables = {}, loadErr = "";
 let scope = null, newPreset = null;

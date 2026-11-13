@@ -15,3 +15,19 @@ export function safeUrl(u) {
   const s = String(u ?? "").trim();
   return /^https?:\/\//i.test(s) ? s : "";
 }
+
+// Date du jour au format AAAA-MM-JJ, en heure LOCALE (toISOString() donne l'heure
+// UTC : entre minuit et 2 h à Paris, on obtenait la date de la veille).
+export function aujourdhui() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Après un re-rendu complet, redonne le focus (et la position du curseur) à un champ
+// recréé à l'identique — sinon une recherche se tape lettre par lettre.
+export function refocus(root, selector, pos) {
+  const el = root?.querySelector(selector);
+  if (!el) return;
+  el.focus();
+  try { el.setSelectionRange(pos, pos); } catch { /* type sans curseur */ }
+}

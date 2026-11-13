@@ -2,7 +2,7 @@
 // Lister / ajouter (manuel, BGG, CSV) / modifier / supprimer. Écriture réservée
 // au pôle Jeux & éditeurs + admin. Catalogue global (hors édition).
 import { supa } from "../supabase.js";
-import { esc } from "../ui/util.js";
+import { esc, refocus } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 
 let root, list = [], cats = [], q = "", mode = "list", editing = null, msg = "";
@@ -118,7 +118,7 @@ function csvView() {
 /* ---------- câblage ---------- */
 function wire() {
   const search = root.querySelector("#f-q");
-  if (search) search.oninput = () => { q = search.value; draw(); };
+  if (search) search.oninput = () => { q = search.value; const pos = search.selectionStart; draw(); refocus(root, "#f-q", pos); };
   const add = root.querySelector("#add");
   if (add) add.onclick = () => { editing = null; msg = ""; mode = "form"; draw(); };
   const impB = root.querySelector("#imp-bgg");

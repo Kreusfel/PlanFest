@@ -31,7 +31,17 @@ export async function render(container) {
 
 async function refresh() {
   const ed = store.editionId;
-  const { data, error } = await supa.from("entrees").select("id,tranche_age").eq("edition_id", ed).eq("jour", jour);
+  // Par pages de 1000 : Supabase plafonne une réponse à 1000 lignes par défaut, et un
+  // samedi peut dépasser ce nombre d'entrées (le compteur restait bloqué à 1000).
+  const data = [];
+  let error = null;
+  for (let from = 0; ; from += 1000) {
+    const r = await supa.from("entrees").select("id,tranche_age").eq("edition_id", ed).eq("jour", jour)
+      .order("id").range(from, from + 999);
+    if (r.error) { error = r.error; break; }
+    data.push(...(r.data ?? []));
+    if (!r.data || r.data.length < 1000) break;
+  }
   const c = {}; TRANCHES.forEach((t) => (c[t[0]] = 0));
   const serverIds = new Set();
   if (!error) (data ?? []).forEach((r) => { serverIds.add(r.id); c[r.tranche_age] = (c[r.tranche_age] || 0) + 1; });

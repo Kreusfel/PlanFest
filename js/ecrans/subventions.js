@@ -119,7 +119,7 @@ function onClick(e) {
 }
 function onChange(e) {
   const t = e.target;
-  if (t.id === "f-statut" && t.closest(".org-filters")) { filt.statut = t.value; return go(); }
+  if (t.id === "f-statut" && t.closest(".filters")) { filt.statut = t.value; return go(); }
   if (t.classList.contains("qs")) return quick(t.dataset.id, t.value);
 }
 function readForm() {

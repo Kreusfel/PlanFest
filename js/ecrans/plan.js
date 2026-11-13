@@ -13,9 +13,8 @@ import { startRealtime, stopRealtime } from "../plan/realtime.js";
 let editable = false, svg, layer, zoom = 1, root, ro = null;
 
 export async function render(container) {
+  unmount();  // par sécurité si le routeur ne l'a pas fait
   root = container;
-  stopRealtime();
-  if (ro) { ro.disconnect(); ro = null; }  // évite d'empiler les observers d'une visite à l'autre
   if (!store.editionId) {
     root.innerHTML = `<div class="page-head"><div><h1>Plan des salles</h1>
       <div class="sub">Aucune édition sélectionnée</div></div></div>
@@ -25,6 +24,8 @@ export async function render(container) {
   }
   editable = isAdmin() || hasPole("logistique_securite");
   root.innerHTML = `<div class="card"><p class="muted">Chargement du plan…</p></div>`;
+  // Les modifs encore en file partent vers LEUR édition avant de charger la nouvelle.
+  await flushNow();
   try { await loadPlan(); } catch (e) {
     root.innerHTML = `<div class="card"><p class="msg">Erreur : ${esc(e.message || e)}</p></div>`;
     return;
@@ -36,6 +37,17 @@ export async function render(container) {
   if (editable) startRealtime(onRemoteChange);
   updateHistButtons();
   window.addEventListener("beforeunload", flushNow);
+}
+
+// Appelé par le routeur quand on quitte l'écran (ou change d'édition) : plus aucun
+// raccourci clavier, temps réel ni rappel d'autosave ne doit agir hors du plan.
+export function unmount() {
+  window.removeEventListener("keydown", onKey);
+  window.removeEventListener("beforeunload", flushNow);
+  stopRealtime();
+  if (ro) { ro.disconnect(); ro = null; }
+  onStatus(() => {}); onReload(() => {});
+  flushNow();  // envoie tout de suite ce qui restait en attente
 }
 
 // Rendu complet après un changement non issu de l'utilisateur local (temps réel / conflit).
@@ -117,6 +129,8 @@ function buildShell() {
     root.querySelector(".palette").addEventListener("click", onPalette);
     svg.addEventListener("pointerdown", onDown);
     window.addEventListener("keydown", onKey);
+    // Délégation branchée UNE fois : #inspector persiste, seul son contenu est refait.
+    document.getElementById("inspector").addEventListener("click", onInspectorClick);
     document.getElementById("btn-undo").onclick = doUndo;
     document.getElementById("btn-redo").onclick = doRedo;
   }
@@ -303,16 +317,16 @@ function wireInspector() {
   insp.querySelectorAll("[data-sf]").forEach((inp) => {
     inp.addEventListener("change", () => saveSalle(inp.dataset.sf, inp.value));
   });
-  insp.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-act]"); if (!b) return;
-    if (b.dataset.act === "dup") dup();
-    else if (b.dataset.act === "rot") rotate();
-    else if (b.dataset.act === "del") del();
-    else if (b.dataset.act === "del-salle") delSalle();
-    else if (b.dataset.act === "place-ici") { placingIci = !placingIci; renderInspector(); }
-    else if (b.dataset.act === "clear-ici") setIci(null, null);
-    else if (b.dataset.act === "rot-salle") rotateSalle();
-  });
+}
+function onInspectorClick(e) {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  if (b.dataset.act === "dup") dup();
+  else if (b.dataset.act === "rot") rotate();
+  else if (b.dataset.act === "del") del();
+  else if (b.dataset.act === "del-salle") delSalle();
+  else if (b.dataset.act === "place-ici") { placingIci = !placingIci; renderInspector(); }
+  else if (b.dataset.act === "clear-ici") setIci(null, null);
+  else if (b.dataset.act === "rot-salle") rotateSalle();
 }
 // Pivote toute la salle de 90° horaire : échange cols/rows et repositionne chaque élément.
 async function rotateSalle() {
@@ -324,7 +338,9 @@ async function rotateSalle() {
   });
   const nc = s.rows; s.rows = s.cols; s.cols = nc;
   if (s.ici_x != null && s.ici_y != null) { const nix = oldRows - s.ici_y; s.ici_y = s.ici_x; s.ici_x = nix; }
-  afterEdit(); renderTabs(); renderCanvas(); renderInspector();
+  // Non annulable : l'historique ne couvre que les éléments, pas les dimensions de la
+  // salle (annuler laissait la salle pivotée avec les éléments à l'ancienne place).
+  initHistory(); updateHistButtons(); renderTabs(); renderCanvas(); renderInspector();
   const { error } = await supa.from("salles").update({ cols: s.cols, rows: s.rows, ici_x: s.ici_x, ici_y: s.ici_y }).eq("id", s.id);
   renderStatus(error ? "err" : "saved");
 }
@@ -359,7 +375,8 @@ async function saveSalle(f, v) {
 async function delSalle() {
   const s = curSalle(); if (!s || plan.salles.length < 2) return;
   if (!confirm("Supprimer cette salle et tout son contenu ?")) return;
-  await supa.from("salles").delete().eq("id", s.id);
+  const { error } = await supa.from("salles").delete().eq("id", s.id);
+  if (error) { alert("Suppression impossible : " + error.message); return; }
   for (const [id, e] of plan.elements) if (e.salle_id === s.id) plan.elements.delete(id);
   plan.salles = plan.salles.filter((x) => x.id !== s.id);
   plan.salleId = plan.salles[0].id; plan.sel.clear();
@@ -429,6 +446,7 @@ function onUp() {
   drag = null; renderCanvas();
 }
 function onKey(e) {
+  if (!root?.isConnected) return;  // filet de sécurité : écran plus affiché
   const tag = (document.activeElement?.tagName) || "";
   if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
   if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
