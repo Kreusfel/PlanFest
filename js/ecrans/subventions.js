@@ -2,7 +2,7 @@
 import { supa } from "../supabase.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur } from "../ui/util.js";
+import { esc, plur, toast } from "../ui/util.js";
 
 const STATUTS = [["a_faire", "À faire"], ["depose", "Déposé"], ["accorde", "Accordé"], ["refuse", "Refusé"]];
 
@@ -146,6 +146,6 @@ async function remove() {
   const s = list.find((x) => x.id === view.id); if (!s) return;
   if (!confirm("Supprimer ce dossier ?")) return;
   const { error } = await supa.from("subventions").delete().eq("id", s.id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   list = list.filter((x) => x.id !== s.id); view = { mode: "list", id: null }; go();
 }

@@ -236,7 +236,7 @@ function ficheView() {
       <div class="r">
         <div class="card"><h2>Cette édition</h2>
           <div class="row2">${f("Statut", `<select data-e="statut"${ro}>${STATUTS.map((s) => `<option value="${s[0]}"${s[0] === je.statut ? " selected" : ""}>${s[1]}</option>`).join("")}</select>`)}${f("Exemplaires", `<input type="number" min="1" data-e="exemplaires" value="${je.exemplaires ?? 1}"${ro}>`)}</div>
-          <label>Usages<div class="chk-row">${USAGES.map(([k, l]) => `<span class="chk-inline"><input type="checkbox" data-usage="${k}"${(je.usages || []).includes(k) ? " checked" : ""}${ro}> ${l}</span>`).join("")}</div></label>
+          <div class="champ-groupe"><span class="lbl">Usages</span><div class="chk-row">${USAGES.map(([k, l]) => `<span class="chk-inline"><input type="checkbox" data-usage="${k}"${(je.usages || []).includes(k) ? " checked" : ""}${ro}> ${l}</span>`).join("")}</div></div>
           <label>Table (plan)<div class="with-link"><select data-e="element_id"${ro}>${tOpts}</select><a class="link" href="#/plan">Voir sur le plan</a></div></label>
           ${f("Notes", `<textarea data-e="notes"${ro}>${esc(je.notes || "")}</textarea>`)}
         </div>

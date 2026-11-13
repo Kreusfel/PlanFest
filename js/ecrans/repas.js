@@ -4,7 +4,7 @@
 //    stock restant. Par édition (historique via les éditions passées).
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 
 const JOURS = [["sam", "Samedi"], ["dim", "Dimanche"]];
@@ -146,7 +146,7 @@ async function editItem(id, field, inp) {
   else val = parseInt(inp.value, 10) || 0;
   if (field === "nom" && !val) { inp.classList.add("err"); return; }
   const { error } = await supa.from("buvette_items").update({ [field]: val }).eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   const it = items.find((x) => x.id === id); if (it) it[field] = val;
   draw(); // recalcule les totaux et colonnes dérivées
 }
@@ -155,6 +155,6 @@ async function delItem(id) {
   const it = items.find((x) => x.id === id);
   if (!confirm(`Supprimer « ${it?.nom || "cet article"} » ?`)) return;
   const { error } = await supa.from("buvette_items").delete().eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   items = items.filter((x) => x.id !== id); draw();
 }

@@ -6,7 +6,7 @@
 import { supa } from "../supabase.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur } from "../ui/util.js";
+import { esc, plur, toast } from "../ui/util.js";
 import { exportFeuillesBenevoles, exportPlanningTables } from "../export/permanences-pdf.js";
 
 const CELL = 22, M = 14;
@@ -306,7 +306,7 @@ function wire() {
 
 async function runPdf(btn, fn) {
   btn.disabled = true;
-  try { await fn(store.editionId, ed.nom); } catch (e) { alert("Erreur export : " + (e.message || e)); }
+  try { await fn(store.editionId, ed.nom); } catch (e) { toast("Erreur export : " + (e.message || e)); }
   btn.disabled = false;
 }
 const pmsg = (t) => { const m = root.querySelector("#p-msg"); if (m) m.textContent = t; };
@@ -328,7 +328,7 @@ async function createPartie() {
 async function removePartie(id) {
   if (!confirm("Supprimer cette animation ?")) return;
   const { error } = await supa.from("parties").delete().eq("id", id);
-  if (error) return alert("Erreur : " + error.message);
+  if (error) return toast("Erreur : " + error.message);
   await load(); draw();
 }
 async function loadSuggest(id) {
@@ -339,7 +339,7 @@ async function loadSuggest(id) {
 async function assign(key) {
   const i = key.indexOf(":"), partieId = key.slice(0, i), beId = key.slice(i + 1);
   const { error } = await supa.from("parties").update({ benevole_edition_id: beId }).eq("id", partieId);
-  if (error) return alert("Erreur : " + error.message);
+  if (error) return toast("Erreur : " + error.message);
   suggestId = null; await load(); draw();
 }
 
@@ -362,12 +362,12 @@ async function addPerm() {
 }
 async function delPerm(id) {
   const { error } = await supa.from("permanences").delete().eq("id", id);
-  if (error) return alert("Erreur : " + error.message);
+  if (error) return toast("Erreur : " + error.message);
   perms = perms.filter((p) => p.id !== id); draw();
 }
 async function setBen(id, ben) {
   const { error } = await supa.from("permanences").update({ benevole_edition_id: ben }).eq("id", id);
-  if (error) return alert("Erreur : " + error.message);
+  if (error) return toast("Erreur : " + error.message);
   const p = perms.find((x) => x.id === id); if (p) p.benevole_edition_id = ben;
   draw();
 }

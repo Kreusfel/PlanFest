@@ -197,7 +197,8 @@ function renderShell() {
     <aside class="sidebar">
       <div class="brand">PlanFest</div>
       <select class="ed" id="ed-select" aria-label="Édition en cours">${edOptions()}</select>
-      <nav class="sidenav">${nav}</nav>
+      <button class="btn small menu-btn" id="menu-btn" aria-expanded="false" aria-controls="sidenav">Menu</button>
+      <nav class="sidenav" id="sidenav">${nav}</nav>
       <div class="side-foot">
         ${isSimulating() ? `<div class="sim-badge">🧪 Simulation pôle : <b>${esc(simPoles().join(", "))}</b> <button class="link" id="sim-off">quitter</button></div>` : ""}
         ${session.profil?.role === "admin" ? `<label class="view-as">Voir en tant que
@@ -213,6 +214,13 @@ function renderShell() {
     <main class="main"><div id="view"></div></main>
   </div>`;
   document.getElementById("signout").onclick = () => signOut();
+  // Téléphone : déplier / replier la navigation (un clic sur un lien re-rend tout, donc replie).
+  const menuBtn = document.getElementById("menu-btn");
+  menuBtn.onclick = () => {
+    const open = document.querySelector(".sidebar").classList.toggle("open");
+    menuBtn.setAttribute("aria-expanded", String(open));
+    menuBtn.textContent = open ? "Fermer" : "Menu";
+  };
   const simOff = document.getElementById("sim-off");
   if (simOff) simOff.onclick = () => { localStorage.removeItem("pf_sim_pole"); location.reload(); };
   const pv = document.getElementById("pole-view");

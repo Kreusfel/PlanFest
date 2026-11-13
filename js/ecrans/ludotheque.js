@@ -2,7 +2,7 @@
 // Lister / ajouter (manuel, BGG, CSV) / modifier / supprimer. Écriture réservée
 // au pôle Jeux & éditeurs + admin. Catalogue global (hors édition).
 import { supa } from "../supabase.js";
-import { esc, refocus } from "../ui/util.js";
+import { esc, refocus, toast } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { parseCSV, norm } from "../ui/csv.js";
 
@@ -171,7 +171,7 @@ async function del(id) {
   const j = list.find((x) => x.id === id);
   if (!confirm(`Supprimer « ${j?.titre || "ce jeu"} » de la ludothèque ?\n(Retire aussi ses choix de tri et ses liens d'édition.)`)) return;
   const { error } = await supa.from("jeux").delete().eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   list = list.filter((x) => x.id !== id); draw();
 }
 

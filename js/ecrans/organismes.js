@@ -183,7 +183,7 @@ function newView() {
     <div class="head-actions"><button class="btn" id="cancel">← Retour</button></div></div>
     <div class="card" style="max-width:620px">
       <label>Nom<input id="o-nom" placeholder="Nom de l'organisme"></label>
-      <label>Rôles<div class="poles-pick">${roleChk}</div></label>
+      <div class="champ-groupe"><span class="lbl">Rôles</span><div class="poles-pick">${roleChk}</div></div>
       <div class="row2">
         <label>Statut<select id="o-statut">${STATUTS_SAISIE.map((s) => `<option value="${s[0]}">${s[1]}</option>`).join("")}</select></label>
         <label>Couleur${swatchPicker(PALETTE[list.length % PALETTE.length], "", 'id="o-couleur"')}</label>
@@ -228,7 +228,7 @@ function ficheView() {
         ${field("", `<span class="chk-inline"><input type="checkbox" data-o="archive"${o.archive ? " checked" : ""}${ro}> Archivé</span>`)}
       </div>
       <div class="r"><div class="card"><h2>Cette édition</h2>
-        ${field("Rôles", `<div class="poles-pick">${roleChk}</div>`)}
+        <div class="champ-groupe"><span class="lbl">Rôles</span><div class="poles-pick">${roleChk}</div></div>
         <div class="row2">
           ${field("Statut", `<select data-e="statut"${ro}>${STATUTS_SAISIE.map((s) => `<option value="${s[0]}"${s[0] === oe.statut ? " selected" : ""}>${s[1]}</option>`).join("")}</select>`)}
           ${field("Dernier contact", `<input type="date" data-e="dernier_contact" value="${esc(oe.dernier_contact || "")}" title="Rempli automatiquement à la relance / confirmation"${ro}>`)}
@@ -249,7 +249,7 @@ function ficheView() {
           <h3>Personnes présentes</h3>
           ${field("Noms (pour les étiquettes)", `<textarea data-e="noms_personnes" placeholder="Un nom par ligne"${ro}>${esc(oe.noms_personnes || "")}</textarea>`)}
           <div class="row2">${field("Repas samedi", `<input type="number" min="0" data-e="personnes_sam" value="${oe.personnes_sam || 0}"${ro}>`)}${field("Repas dimanche", `<input type="number" min="0" data-e="personnes_dim" value="${oe.personnes_dim || 0}"${ro}>`)}</div>
-          ${field("", `<div class="chk-row"><span class="chk-inline"><input type="checkbox" data-e="convention_recue"${oe.convention_recue ? " checked" : ""}${ro}> Convention reçue</span><span class="chk-inline"><input type="checkbox" data-e="assurance_recue"${oe.assurance_recue ? " checked" : ""}${ro}> Assurance reçue</span></div>`)}
+          <div class="champ-groupe"><div class="chk-row"><span class="chk-inline"><input type="checkbox" data-e="convention_recue"${oe.convention_recue ? " checked" : ""}${ro}> Convention reçue</span><span class="chk-inline"><input type="checkbox" data-e="assurance_recue"${oe.assurance_recue ? " checked" : ""}${ro}> Assurance reçue</span></div></div>
         </div>
         <div data-sec="sponsor"${isS ? "" : ' style="display:none"'}>
           <h3>Sponsor</h3>

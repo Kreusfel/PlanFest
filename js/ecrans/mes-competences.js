@@ -3,7 +3,7 @@
 import { supa } from "../supabase.js";
 import { session } from "../auth.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
 
 let root, me = null, games = [], comps = [], beneIds = new Set(), cats = [], idx = 0;
 
@@ -114,7 +114,7 @@ async function setLevel(niveau) {
   const g = games[idx]; if (!g) return;
   await supa.from("competences").delete().eq("benevole_id", me.id).eq("jeu_id", g.id);
   const { error } = await supa.from("competences").insert({ benevole_id: me.id, jeu_id: g.id, niveau });
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   comps = comps.filter((c) => !(c.benevole_id === me.id && c.jeu_id === g.id));
   comps.push({ benevole_id: me.id, jeu_id: g.id, niveau });
   idx++; draw();
@@ -123,7 +123,7 @@ async function setCatLevel(niveau) {
   const g = games[idx]; if (!g || !g.categorie_id) return;
   await supa.from("competences").delete().eq("benevole_id", me.id).eq("categorie_id", g.categorie_id);
   const { error } = await supa.from("competences").insert({ benevole_id: me.id, categorie_id: g.categorie_id, niveau });
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   comps = comps.filter((c) => !(c.benevole_id === me.id && c.categorie_id === g.categorie_id));
   comps.push({ benevole_id: me.id, categorie_id: g.categorie_id, niveau });
   idx++; draw();

@@ -389,13 +389,18 @@ input[type=color]{padding:3px;height:44px}
 .ludo-thumb img{width:100%;height:100%;object-fit:cover}
 
 @media (max-width:1000px){.planbody{grid-template-columns:1fr}}
+.menu-btn{display:none}
+/* Téléphone : barre compacte (nom, édition, Menu) ; la navigation se déplie au besoin. */
 @media (max-width:760px){
   .app-shell{grid-template-columns:1fr}
-  .sidebar{position:static;height:auto;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-right:0;border-bottom:1px solid var(--line)}
-  .brand{padding:4px 8px}
-  .sidenav{flex-direction:row;overflow-x:auto;gap:4px}
-  .navlink{white-space:nowrap;padding:8px 12px}
-  .side-foot{border-top:0;flex-direction:row;align-items:center;margin-left:auto}
+  .sidebar{position:sticky;top:0;z-index:50;height:auto;max-height:100vh;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;border-right:0;border-bottom:1px solid var(--line)}
+  .brand{padding:0 4px;font-size:18px}
+  .sidebar .ed{flex:1;min-width:0;margin:0}
+  .menu-btn{display:inline-flex}
+  .sidenav,.side-foot{display:none;flex-basis:100%}
+  .sidebar.open{overflow-y:auto}
+  .sidebar.open .sidenav{display:flex;flex-direction:column}
+  .sidebar.open .side-foot{display:flex}
   .main{padding:16px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -407,3 +412,8 @@ input[type=color]{padding:3px;height:44px}
   box-shadow:0 6px 24px rgba(0,0,0,.18);background:var(--alert-bg);color:var(--alert);border:1px solid var(--alert)}
 .toast.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
 .toast[hidden]{display:none}
+.dup-form{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+.dup-form[hidden]{display:none}
+/* Groupe de cases sous un intitulé (remplace un <label> qui en contenait plusieurs). */
+.champ-groupe{display:block;margin:0 0 12px}
+.champ-groupe > .lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}

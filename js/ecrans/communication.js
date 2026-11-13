@@ -5,7 +5,7 @@
 //    logos d'organismes à récupérer.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc, refocus } from "../ui/util.js";
+import { esc, refocus, toast } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { qrSVG } from "../export/qr.js";
 import { parseCSV, norm } from "../ui/csv.js";
@@ -190,7 +190,7 @@ async function editContact(id, field, inp) {
   else val = val.trim() || (field === "nom" ? null : null);
   if (field === "nom" && !val) { inp.classList.add("err"); return; }
   const { error } = await supa.from("comm_contacts").update({ [field]: val }).eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   const c = contacts.find((x) => x.id === id); if (c) c[field] = val;
   if (field === "quantite_flyers" || field === "type") draw();
 }
@@ -198,12 +198,12 @@ async function delContact(id) {
   const c = contacts.find((x) => x.id === id);
   if (!confirm(`Supprimer « ${c?.nom || "ce contact"} » ?`)) return;
   const { error } = await supa.from("comm_contacts").delete().eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   contacts = contacts.filter((x) => x.id !== id); draw();
 }
 async function setEnvoi(contactId, statut) {
   const { error } = await supa.from("comm_envois").upsert({ edition_id: store.editionId, contact_id: contactId, statut }, { onConflict: "edition_id,contact_id" });
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   envois.set(contactId, statut); draw();
 }
 

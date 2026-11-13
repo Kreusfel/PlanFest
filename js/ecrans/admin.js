@@ -3,7 +3,7 @@
 import { supa } from "../supabase.js";
 import { session, isAdmin, sendInvitation } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur, aujourdhui, telecharger } from "../ui/util.js";
+import { esc, plur, aujourdhui, telecharger, toast } from "../ui/util.js";
 import { exportMontage } from "../export/montage.js";
 import { exportEtiquettes } from "../export/etiquettes.js";
 import { exportFiches } from "../export/fiches.js";
@@ -131,7 +131,7 @@ function cardInvitations() {
       <label>E-mail<input id="inv-email" type="email" placeholder="prenom@exemple.fr"></label>
       <label>Rôle<select id="inv-role"><option value="membre">Membre</option><option value="admin">Admin</option></select></label>
     </div>
-    <label>Pôles responsables<div class="poles-pick">${chks}</div></label>
+    <div class="champ-groupe"><span class="lbl">Pôles responsables</span><div class="poles-pick">${chks}</div></div>
     <button class="btn primary" id="inv-create">Inviter par e-mail</button>
     <p class="msg" id="inv-msg" aria-live="polite"></p></div>`;
 }
@@ -190,9 +190,9 @@ async function onClick(e) {
 }
 
 async function pdfExport(fn) {
-  if (!store.editionId) { alert("Aucune édition courante (ouvre-en une dans « Plan des salles »)."); return; }
+  if (!store.editionId) { toast("Aucune édition courante (ouvre-en une dans « Plan des salles »)."); return; }
   try { await fn(store.editionId, edNom); }
-  catch (e) { alert("Erreur export : " + (e.message || e)); }
+  catch (e) { toast("Erreur export : " + (e.message || e)); }
 }
 async function figer() {
   const msg = document.getElementById("v-msg");
@@ -206,7 +206,7 @@ async function figer() {
 async function restaurer(id) {
   // Annoncer ce qui serait perdu : les parties des tables absentes de la version.
   const imp = await supa.rpc("restauration_impact", { p_version: id });
-  if (imp.error) { alert("Erreur : " + imp.error.message); return; }
+  if (imp.error) { toast("Erreur : " + imp.error.message); return; }
   const { tables_retirees: t = 0, parties_perdues: p = 0 } = imp.data?.[0] ?? {};
   let txt = "Restaurer cette version ? Le plan actuel de l'édition sera remplacé.";
   if (t) txt += `\n\n${t} élément(s) du plan actuel n'existe(nt) pas dans cette version et seront retirés`
@@ -214,8 +214,8 @@ async function restaurer(id) {
   else txt += "\n\nLes parties programmées sont conservées.";
   if (!confirm(txt)) return;
   const { error } = await supa.rpc("restaurer_plan", { p_version: id });
-  if (error) { alert("Erreur : " + error.message); return; }
-  alert("Plan restauré. Rouvre « Plan des salles » pour le voir.");
+  if (error) { toast("Erreur : " + error.message); return; }
+  toast("Plan restauré. Rouvre « Plan des salles » pour le voir.", "ok");
   await reload();
 }
 
@@ -230,12 +230,12 @@ async function onChange(e) {
 
 async function upd(table, id, patch) {
   const { error } = await supa.from(table).update(patch).eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   await reload();
 }
 async function del(table, id) {
   const { error } = await supa.from(table).delete().eq("id", id);
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   await reload();
 }
 async function reload() { try { await loadRefs(); draw(); } catch (e) { /* laissé en l'état */ } }
@@ -262,7 +262,7 @@ async function supprimerCompte(m) {
   if (!m) return;
   if (!confirm(`Supprimer définitivement le compte ${m.email} ?\n\nLa personne ne pourra plus se connecter ; son invitation est effacée (tu pourras la réinviter). Sa fiche bénévole éventuelle est conservée.`)) return;
   const { error } = await supa.rpc("supprimer_compte", { p_profil: m.id });
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   await reload();
 }
 

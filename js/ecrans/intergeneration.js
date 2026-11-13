@@ -4,7 +4,7 @@
 //  - Malles : jeux sélectionnés pour les malles prêtées aux écoles.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { parseCSV, norm } from "../ui/csv.js";
 
@@ -170,7 +170,7 @@ async function addContact() {
 async function setStat(contactId, statut) {
   if (!statut) {
     const { error } = await supa.from("vendredi_participants").delete().eq("edition_id", store.editionId).eq("contact_id", contactId);
-    if (error) return alert("Erreur : " + error.message);
+    if (error) return toast("Erreur : " + error.message);
     parts.delete(contactId); return draw();
   }
   const cur = parts.get(contactId);
@@ -178,14 +178,14 @@ async function setStat(contactId, statut) {
   const row = { edition_id: store.editionId, contact_id: contactId, statut,
     effectif: cur?.effectif ?? (c?.quantite_flyers || null), creneau: cur?.creneau || null };
   const { data, error } = await supa.from("vendredi_participants").upsert(row, { onConflict: "edition_id,contact_id" }).select().single();
-  if (error) return alert("Erreur : " + error.message);
+  if (error) return toast("Erreur : " + error.message);
   parts.set(contactId, data); draw();
 }
 async function setPart(contactId, patch) {
   const cur = parts.get(contactId) || { edition_id: store.editionId, contact_id: contactId, statut: "invite" };
   const row = { ...cur, ...patch };
   const { data, error } = await supa.from("vendredi_participants").upsert(row, { onConflict: "edition_id,contact_id" }).select().single();
-  if (error) return alert("Erreur : " + error.message);
+  if (error) return toast("Erreur : " + error.message);
   parts.set(contactId, data); draw();
 }
 
@@ -199,7 +199,7 @@ async function addMalle() {
 }
 async function delMalle(jeuId) {
   const { error } = await supa.from("malle_jeux").delete().eq("edition_id", store.editionId).eq("jeu_id", jeuId);
-  if (error) return alert("Erreur : " + error.message);
+  if (error) return toast("Erreur : " + error.message);
   malles = malles.filter((m) => m.jeu_id !== jeuId); draw();
 }
 

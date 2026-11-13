@@ -28,6 +28,13 @@ export async function render(c) {
             <textarea data-pres="${e.id}" placeholder="Décris le festival pour les visiteurs…">${esc(e.presentation || "")}</textarea></label>
           <button class="btn primary" data-savepub="${e.id}">Enregistrer</button>
         </details>` : ""}
+        ${isAdmin() ? `<div class="dup-form" data-dupform="${e.id}" hidden>
+          <div class="row2">
+            <label>Nom de la copie<input data-dupnom="${e.id}" value="${esc(e.nom)} (copie)"></label>
+            <label>Date du samedi<input type="date" data-dupdate="${e.id}"></label>
+          </div>
+          <button class="btn primary small" data-dupgo="${e.id}">Créer la copie</button>
+        </div>` : ""}
       </div>
       <div class="actions">
         <button class="btn" data-open="${e.id}">Ouvrir</button>
@@ -58,14 +65,20 @@ export async function render(c) {
     location.hash = "#/plan";
   }));
 
-  c.querySelectorAll("[data-dup]").forEach((b) => (b.onclick = async () => {
-    const nom = prompt("Nom de la copie ?");
-    if (!nom) return;
-    const date = prompt("Date du samedi (AAAA-MM-JJ) ?");
-    if (!date) return;
+  // Dupliquer : petit formulaire dans la ligne (nom + vrai sélecteur de date),
+  // au lieu de deux prompt() où la date se tapait à la main.
+  c.querySelectorAll("[data-dup]").forEach((b) => (b.onclick = () => {
+    const f = c.querySelector(`[data-dupform="${b.dataset.dup}"]`);
+    if (f) { f.hidden = !f.hidden; if (!f.hidden) f.querySelector("input")?.focus(); }
+  }));
+  c.querySelectorAll("[data-dupgo]").forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.dupgo;
+    const nom = (c.querySelector(`[data-dupnom="${id}"]`)?.value || "").trim();
+    const date = c.querySelector(`[data-dupdate="${id}"]`)?.value || "";
+    if (!nom || !date) { msg.textContent = "Nom et date du samedi requis pour la copie."; return; }
     msg.textContent = "Duplication…";
     const { error } = await supa.rpc("dupliquer_edition", {
-      p_source: b.dataset.dup, p_nom: nom, p_date_samedi: date,
+      p_source: id, p_nom: nom, p_date_samedi: date,
     });
     msg.textContent = error ? "Erreur : " + error.message : "Édition dupliquée.";
     if (!error) reload();

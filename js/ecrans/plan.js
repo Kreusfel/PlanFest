@@ -2,7 +2,7 @@
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
 import { isAdmin, hasPole } from "../auth.js";
-import { esc } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
 import { plan, loadPlan, curSalle, salleElements, maxNumero, freeSpot } from "../plan/model.js";
 import { exportPlanPdf, exportPlanPng } from "../export/plan-pdf.js";
 import { CELL, M, BLOCS, renderPlan } from "../plan/render.js";
@@ -376,7 +376,7 @@ async function delSalle() {
   const s = curSalle(); if (!s || plan.salles.length < 2) return;
   if (!confirm("Supprimer cette salle et tout son contenu ?")) return;
   const { error } = await supa.from("salles").delete().eq("id", s.id);
-  if (error) { alert("Suppression impossible : " + error.message); return; }
+  if (error) { toast("Suppression impossible : " + error.message); return; }
   for (const [id, e] of plan.elements) if (e.salle_id === s.id) plan.elements.delete(id);
   plan.salles = plan.salles.filter((x) => x.id !== s.id);
   plan.salleId = plan.salles[0].id; plan.sel.clear();

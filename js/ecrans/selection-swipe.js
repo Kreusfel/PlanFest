@@ -2,7 +2,7 @@
 // Pour chaque jeu de l'asso : Oui / Non / Oui au bar à jeux, enregistré par édition.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 
 const CHOIX_LBL = { oui: "Oui", bar: "Bar à jeux", non: "Non" };
@@ -110,10 +110,10 @@ function wireCard() {
 
 async function setChoix(c) {
   const g = games[idx]; if (!g) return;
-  if (!gere()) { alert("Réservé au pôle Jeux & éditeurs."); return; }
+  if (!gere()) { toast("Réservé au pôle Jeux & éditeurs."); return; }
   const { error } = await supa.from("ludotheque_choix")
     .upsert({ edition_id: store.editionId, jeu_id: g.id, choix: c }, { onConflict: "edition_id,jeu_id" });
-  if (error) { alert("Erreur : " + error.message); return; }
+  if (error) { toast("Erreur : " + error.message); return; }
   choix.set(g.id, c);
   idx++; draw();
 }

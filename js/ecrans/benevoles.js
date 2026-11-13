@@ -159,9 +159,9 @@ function ficheView() {
           ${field("Statut", `<select data-e="statut"${ro}>${STATUTS.map((s) => `<option value="${s[0]}"${s[0] === be.statut ? " selected" : ""}>${s[1]}</option>`).join("")}</select>`)}
           ${field("", `<span class="chk-inline" style="margin-top:26px"><input type="checkbox" data-e="est_animateur"${be.est_animateur ? " checked" : ""}${ro}> Animateur</span>`)}
         </div>
-        <label>Repas<span class="chk-inline"><input type="checkbox" data-e="repas_sam"${be.repas_sam ? " checked" : ""}${ro}> Samedi</span>
-          <span class="chk-inline"><input type="checkbox" data-e="repas_dim"${be.repas_dim ? " checked" : ""}${ro}> Dimanche</span></label>
-        <label>Disponibilités${disposGrid(ro)}</label>
+        <div class="champ-groupe"><span class="lbl">Repas</span><span class="chk-inline"><input type="checkbox" data-e="repas_sam"${be.repas_sam ? " checked" : ""}${ro}> Samedi</span>
+          <span class="chk-inline"><input type="checkbox" data-e="repas_dim"${be.repas_dim ? " checked" : ""}${ro}> Dimanche</span></div>
+        <div class="champ-groupe"><span class="lbl">Disponibilités</span>${disposGrid(ro)}</div>
         ${field("Régime / allergies", `<input data-regime value="${esc(regimeBe)}" placeholder="ex. végétarien, sans gluten…"${ro}>`)}
         ${field("Notes", `<textarea data-e="notes"${ro}>${esc(be.notes || "")}</textarea>`)}
       </div></div>
