@@ -37,8 +37,8 @@ function listView() {
     const img = j.miniature_url || j.image_url;
     const meta = [(j.joueurs_min || j.joueurs_max) ? `${j.joueurs_min || "?"}–${j.joueurs_max || "?"} j.` : "", j.duree_min ? `${j.duree_min} min` : "", j.age_min ? `${j.age_min}+` : ""].filter(Boolean).join(" · ");
     return `<tr class="clk" data-edit="${j.id}">
-      <td class="ludo-cell"><span class="ludo-thumb">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
-        <span><b>${esc(j.titre)}</b>${j.annee ? ` <span class="muted">(${j.annee})</span>` : ""}</span></td>
+      <td><div class="ludo-cell"><span class="ludo-thumb">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
+        <span><b>${esc(j.titre)}</b>${j.annee ? ` <span class="muted">(${j.annee})</span>` : ""}</span></div></td>
       <td>${esc(catNom(j.categorie_id))}</td>
       <td class="muted">${esc(meta || "—")}</td>
       <td style="text-align:right">${canWrite() ? `<button class="btn small danger" data-del="${j.id}">Suppr.</button>` : ""}</td></tr>`;
