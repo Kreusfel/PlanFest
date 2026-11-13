@@ -48,9 +48,6 @@ export function hasPole(code) { return isAdmin() || session.poles.includes(code)
 export function signIn(email, password) {
   return supa.auth.signInWithPassword({ email, password });
 }
-export function signUp(email, password) {
-  return supa.auth.signUp({ email, password });
-}
 export function resetPassword(email) {
   return supa.auth.resetPasswordForEmail(email, {
     redirectTo: retour(),

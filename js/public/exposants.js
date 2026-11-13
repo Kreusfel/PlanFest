@@ -1,7 +1,7 @@
 // Page publique #/public/infos/<editionId> — présentation libre (écrite par l'organisation)
 // + récap auto des exposants confirmés. Sans compte.
 import { supa } from "../supabase.js";
-import { esc } from "../ui/util.js";
+import { esc, safeUrl } from "../ui/util.js";
 import { publicShell } from "./layout.js";
 
 const ROLE_LBL = { partenaire: "Partenaire", editeur: "Éditeur", sponsor: "Sponsor" };
@@ -30,7 +30,7 @@ export async function render(app, editionId) {
       <div class="expo-top">${e.logo_url ? `<img class="expo-logo" src="${esc(e.logo_url)}" alt="" loading="lazy">` : ""}
         <div><h3>${dot}${esc(e.nom)}</h3><div class="expo-roles">${roles}</div></div></div>
       ${withEmplacement && e.numeros ? `<div class="muted">Emplacement : table ${esc(e.numeros)}</div>` : ""}
-      ${e.site ? `<a href="${esc(e.site)}" target="_blank" rel="noopener">Site web</a>` : ""}
+      ${safeUrl(e.site) ? `<a href="${esc(safeUrl(e.site))}" target="_blank" rel="noopener">Site web</a>` : ""}
     </div>`;
   };
 

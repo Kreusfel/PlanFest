@@ -4,7 +4,8 @@
 //  - Personne sans compte  → auth.admin.inviteUserByEmail : e-mail « Vous êtes invité »,
 //    le compte est créé et activé par le trigger creer_profil.
 //  - Compte déjà créé      → e-mail de réinitialisation : la personne (re)choisit son
-//    mot de passe. Sert de « Renvoyer le lien ».
+//    mot de passe. Sert de « Renvoyer le lien ». Si ce compte n'avait pas encore été
+//    activé par l'invitation, seul un admin peut l'activer (jamais de rétrogradation).
 // Droits (mêmes règles que la RLS d'invitations) : admin, ou responsable du pôle
 // animateurs_benevoles pour une invitation de rôle « membre ».
 // Déploiement : supabase functions deploy inviter
@@ -23,22 +24,31 @@ const URL_ = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+// Recherche exacte insensible à la casse : on neutralise les jokers % et _ de ILIKE.
+const exact = (email: string) => email.replace(/[\\%_]/g, (c) => "\\" + c);
+
 // Même effet que le trigger creer_profil (migrations 001/005) pour un profil déjà existant.
+// Réservé aux admins (un responsable ne peut ni réactiver ni modifier un compte existant).
+// Ne rétrograde jamais un admin. Étapes séquentielles : l'invitation n'est marquée
+// utilisée qu'en dernier, si tout le reste a réussi.
 // deno-lint-ignore no-explicit-any
 async function appliquerInvitation(admin: any, email: string): Promise<string | null> {
-  const { data: inv } = await admin.from("invitations").select("*").ilike("email", email).maybeSingle();
-  const { data: p } = await admin.from("profils").select("id").ilike("email", email).maybeSingle();
+  const { data: inv } = await admin.from("invitations").select("*").ilike("email", exact(email)).maybeSingle();
+  const { data: p } = await admin.from("profils").select("id, role").ilike("email", exact(email)).maybeSingle();
   if (!inv || !p) return "Compte existant introuvable dans profils.";
-  const steps = [
-    admin.from("profils").update({ actif: true, role: inv.role }).eq("id", p.id),
-    inv.pole_ids?.length
-      ? admin.from("responsables_pole").upsert(inv.pole_ids.map((pole_id: string) => ({ profil_id: p.id, pole_id })))
-      : null,
-    inv.benevole_id ? admin.from("benevoles").update({ profil_id: p.id }).eq("id", inv.benevole_id) : null,
-    admin.from("invitations").update({ utilisee_le: new Date().toISOString() }).eq("id", inv.id),
-  ].filter(Boolean);
-  for (const r of await Promise.all(steps)) if (r.error) return r.error.message;
-  return null;
+  const role = p.role === "admin" ? "admin" : inv.role;
+  let r = await admin.from("profils").update({ actif: true, role }).eq("id", p.id);
+  if (r.error) return r.error.message;
+  if (inv.pole_ids?.length) {
+    r = await admin.from("responsables_pole").upsert(inv.pole_ids.map((pole_id: string) => ({ profil_id: p.id, pole_id })));
+    if (r.error) return r.error.message;
+  }
+  if (inv.benevole_id) {
+    r = await admin.from("benevoles").update({ profil_id: p.id }).eq("id", inv.benevole_id);
+    if (r.error) return r.error.message;
+  }
+  r = await admin.from("invitations").update({ utilisee_le: new Date().toISOString() }).eq("id", inv.id);
+  return r.error ? r.error.message : null;
 }
 
 Deno.serve(async (req) => {
@@ -64,7 +74,7 @@ Deno.serve(async (req) => {
     // 2. L'invitation doit exister (et être de rôle membre pour un responsable)
     const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
     const { data: inv, error: invErr } = await admin
-      .from("invitations").select("email, role, utilisee_le").ilike("email", email).maybeSingle();
+      .from("invitations").select("email, role, utilisee_le").ilike("email", exact(email)).maybeSingle();
     if (invErr) return json({ error: invErr.message }, 500);
     if (!inv) return json({ error: "Aucune invitation pour cette adresse." }, 404);
     if (!isAdmin && inv.role !== "membre") return json({ error: "Seul un admin peut inviter un admin." }, 403);
@@ -76,7 +86,9 @@ Deno.serve(async (req) => {
       if (!error) return json({ ok: true, envoi: "invitation" });
       // Compte déjà existant (créé avant l'invitation) : on bascule sur le lien de mot de passe.
       if (!/already|registered|exists/i.test(error.message)) return json({ error: error.message }, 400);
-      // Le trigger creer_profil n'a pas joué (compte antérieur) : appliquer l'invitation ici.
+      // Le trigger creer_profil n'a pas joué (compte antérieur ou désactivé) :
+      // seul un admin peut l'activer via l'invitation.
+      if (!isAdmin) return json({ error: "Un compte existe déjà pour cette adresse : seul un admin peut l'activer." }, 403);
       const err = await appliquerInvitation(admin, email);
       if (err) return json({ error: err }, 500);
     }

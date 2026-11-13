@@ -1,8 +1,10 @@
-// Edge Function bgg-import — proxy vers l'API XML publique de BoardGameGeek.
+// Edge Function bgg-import — proxy vers l'API XML de BoardGameGeek, réservé aux comptes actifs.
 // Actions : { action:"search", query } → résultats enrichis ; { action:"thing", bgg_id } → 1 jeu.
 // Déploiement : supabase functions deploy bgg-import
 // Jeton d'application BGG : secret Supabase BGG_TOKEN (Edge Functions → Secrets),
 // envoyé en « Authorization: Bearer … ». Il reste côté serveur, jamais dans le navigateur.
+
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -67,6 +69,15 @@ async function fetchText(url: string, tries = 4): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
+    // Réservé aux comptes actifs : la clé publique seule ne suffit pas à consommer le jeton BGG.
+    const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+    });
+    const { data: u } = await asUser.auth.getUser();
+    if (!u?.user) return json({ error: "Non connecté." }, 401);
+    const { data: actif } = await asUser.rpc("est_actif");
+    if (actif !== true) return json({ error: "Compte inactif." }, 403);
+
     const { action, query, bgg_id } = await req.json();
     if (action === "thing") {
       const xml = await fetchText(`https://boardgamegeek.com/xmlapi2/thing?stats=1&id=${encodeURIComponent(String(bgg_id))}`);
