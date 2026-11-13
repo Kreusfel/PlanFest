@@ -101,6 +101,9 @@ a{color:var(--primary)}
 /* ---------- Formulaires ---------- */
 label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px}
 input,select,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 11px;width:100%;min-height:44px}
+/* Listes déroulantes : flèche maison, au lieu du rendu natif « bouton brillant » de Safari/macOS. */
+select:not([multiple]){-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236B6B73' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;padding-right:32px;cursor:pointer}
+select:not([multiple]):disabled{cursor:default;opacity:.6}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--primary);outline-offset:0;border-color:var(--primary)}
 input.err{border-color:var(--alert)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
