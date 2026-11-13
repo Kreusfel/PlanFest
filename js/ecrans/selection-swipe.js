@@ -68,9 +68,9 @@ function draw() {
       ${cur ? `<span class="tag ${CHOIX_CLS[cur]}" style="align-self:flex-start">Déjà : ${esc(CHOIX_LBL[cur])}</span>` : ""}
     </div>
     <div class="swipe-btns">
-      <button class="big" style="color:#991B1B;border-color:#991B1B" data-ch="non">Non</button>
-      <button class="big" data-ch="bar">Oui — bar à jeux</button>
-      <button class="big pri" data-ch="oui">Oui</button>
+      <button class="btn big danger" data-ch="non">Non</button>
+      <button class="btn big" data-ch="bar">Oui — bar à jeux</button>
+      <button class="btn big primary" data-ch="oui">Oui</button>
     </div>
     <div class="swipe-row2">
       <button class="btn" id="lu-back"${idx === 0 ? " disabled" : ""}>Annuler</button>

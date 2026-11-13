@@ -69,9 +69,9 @@ function draw() {
       ${hasAnimator(g) ? "" : `<span class="tag warn" style="align-self:flex-start">Aucun animateur pour ce jeu</span>`}
     </div>
     <div class="swipe-btns">
-      <button class="big" style="color:#991B1B;border-color:#991B1B" data-lvl="non">Je n'anime pas</button>
-      <button class="big" data-lvl="apprendre">Je veux apprendre</button>
-      <button class="big pri" data-lvl="anime">J'anime</button>
+      <button class="btn big danger" data-lvl="non">Je n'anime pas</button>
+      <button class="btn big" data-lvl="apprendre">Je veux apprendre</button>
+      <button class="btn big primary" data-lvl="anime">J'anime</button>
     </div>
     <div class="swipe-row2">
       <button class="btn" id="sw-back"${idx === 0 ? " disabled" : ""}>Annuler</button>
