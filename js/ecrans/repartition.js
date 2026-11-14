@@ -5,11 +5,11 @@ import { supa } from "../supabase.js";
 import { store } from "../store.js";
 import { esc, toast } from "../ui/util.js";
 import { exportEtiquettes } from "../export/etiquettes.js";
-import { exportFiches } from "../export/fiches.js";
+import { exportFiches, CONSIGNES } from "../export/fiches.js";
 import { exportBadges } from "../export/badges.js";
 import { isAdmin, hasPole } from "../auth.js";
 
-let root, salles = [], tables = [], partenaires = [];
+let root, salles = [], tables = [], partenaires = [], consignes = "";
 const gere = () => isAdmin() || hasPole("partenaires");
 const salleNom = (id) => salles.find((s) => s.id === id)?.nom || "";
 const partNom = (id) => partenaires.find((p) => p.id === id)?.nom || "?";
@@ -18,11 +18,13 @@ export async function render(container) {
   root = container;
   if (!store.editionId) { root.innerHTML = `<div class="card"><p><a class="btn primary" href="#/editions">Choisir une édition</a></p></div>`; return; }
   root.innerHTML = `<div class="card"><p class="muted">Chargement…</p></div>`;
-  const [s, el, oe] = await Promise.all([
+  const [s, el, oe, ed] = await Promise.all([
     supa.from("salles").select("id,nom").eq("edition_id", store.editionId).order("cree_le"),
     supa.from("elements").select("id,numero,salle_id,organisme_edition_id").eq("edition_id", store.editionId).eq("kind", "table").eq("type_table", "partenaire"),
     supa.from("organisme_editions").select("id,statut,tables_souhaitees,organismes(nom)").eq("edition_id", store.editionId).contains("roles", ["partenaire"]),
+    supa.from("editions").select("consignes_exposants").eq("id", store.editionId).single(),
   ]);
+  consignes = ed.data?.consignes_exposants || "";
   salles = s.data || [];
   tables = (el.data || []).sort((a, b) => (parseInt(a.numero, 10) || 0) - (parseInt(b.numero, 10) || 0));
   partenaires = (oe.data || []).map((o) => ({ id: o.id, nom: o.organismes?.nom || "?", statut: o.statut, souhait: o.tables_souhaitees || 0 }))
@@ -82,6 +84,12 @@ function draw() {
     ${tables.length
       ? bySalle
       : `<div class="card"><p class="muted">Aucune table de type « Partenaire » dans le plan. La logistique doit d'abord en poser (page Plan des salles).</p></div>`}
+    <div class="card"><details class="pub-editor"><summary>Consignes des fiches d'accueil</summary>
+      <label>Une consigne par ligne (imprimées sur chaque fiche)
+        <textarea id="consignes" rows="5"${gere() ? "" : " disabled"} placeholder="${esc(CONSIGNES.join("\n"))}">${esc(consignes)}</textarea></label>
+      <p class="mini">Laisser vide pour garder les consignes par défaut (affichées en gris).</p>
+      ${gere() ? `<button class="btn primary" id="consignes-save">Enregistrer</button>` : ""}
+    </details></div>
     <p class="msg" id="r-msg" aria-live="polite"></p>`;
   wire();
 }
@@ -98,6 +106,14 @@ function wire() {
   pdf("#exp-etiquettes", exportEtiquettes);
   pdf("#exp-fiches", exportFiches);
   pdf("#exp-badges", exportBadges);
+  const cs = root.querySelector("#consignes-save");
+  if (cs) cs.onclick = async () => {
+    const texte = root.querySelector("#consignes").value || "";
+    const { error } = await supa.rpc("maj_consignes_exposants", { p_edition: store.editionId, p_texte: texte });
+    if (error) { toast("Erreur : " + error.message); return; }
+    consignes = texte.trim();
+    toast("Consignes enregistrées.", "ok");
+  };
   root.querySelectorAll("[data-tbl]").forEach((sel) => (sel.onchange = () => assign(sel.dataset.tbl, sel.value || null)));
 }
 

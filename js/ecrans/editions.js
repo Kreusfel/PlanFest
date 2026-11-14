@@ -61,7 +61,7 @@ export async function render(c) {
             <label>Nom de la copie<input data-dupnom="${e.id}" value="${esc(e.nom)} (copie)"></label>
             <label>Date du samedi<input type="date" data-dupdate="${e.id}"></label>
           </div>
-          <p class="mini">Repris : plan des salles, organismes (à recontacter), jeux, tri de la ludothèque, horaires, subventions (à refaire, échéances décalées),
+          <p class="mini">Repris : lieu, consignes des fiches, plan des salles, organismes (à recontacter), jeux, tri de la ludothèque, horaires, subventions (à refaire, échéances décalées),
             articles de buvette (sans quantités), créneaux de permanence (sans bénévole), malles des écoles.
             Les bénévoles se reprennent ensuite depuis l'écran Bénévoles.</p>
           <button class="btn primary small" data-dupgo="${e.id}">Créer la copie</button>

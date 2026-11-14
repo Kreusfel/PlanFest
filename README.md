@@ -35,7 +35,7 @@ js/plan/            éditeur de plan (modèle, rendu, annuler/refaire, autosave,
 js/export/          PDF (plan, montage, étiquettes, fiches, permanences), QR codes
 js/offline/         files IndexedDB du jour J
 js/ui/util.js       utilitaires partagés (esc, safeUrl, toast, dates…)
-supabase/migrations 001 → 041, à exécuter dans l'ordre
+supabase/migrations 001 → 042, à exécuter dans l'ordre
 supabase/functions  Edge Functions : inviter, bgg-import
 supabase/seed_demo.sql  données fictives de démonstration (facultatif)
 docs/archive/       ancien brief et maquette d'origine (historique, non utilisés)
@@ -76,7 +76,7 @@ Pour que les liens des e-mails (invitation, mot de passe) reviennent en local, a
 ## Installer un projet Supabase
 
 1. **Migrations** : SQL Editor → exécuter `supabase/migrations/001_socle.sql` à
-   `041_public_infos_formulaires.sql`, **dans l'ordre**, une seule fois chacune (elles ne sont pas
+   `042_consignes_exposants.sql`, **dans l'ordre**, une seule fois chacune (elles ne sont pas
    toutes rejouables). Le premier compte admin se crée à la main (Authentication → Users,
    puis `update profils set role = 'admin', actif = true where email = '…'`).
 2. **Edge Functions** (Edge Functions → Deploy a new function → Via Editor, ou

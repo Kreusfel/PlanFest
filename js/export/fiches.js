@@ -4,7 +4,8 @@ import { supa } from "../supabase.js";
 import { slug } from "../ui/util.js";
 
 
-const CONSIGNES = [
+// Consignes par défaut, si l'édition n'en a pas saisi (Répartition tables).
+export const CONSIGNES = [
   "Récupérez votre badge à l'accueil en arrivant.",
   "Installation possible dès 8h00 le jour J.",
   "Un référent logistique passe en matinée pour vérifier votre stand.",
@@ -19,6 +20,9 @@ export async function exportFiches(editionId, editionNom) {
     supa.from("salles").select("id,nom").eq("edition_id", editionId),
   ]);
   if (oe.error) throw oe.error;
+  const ed = await supa.from("editions").select("consignes_exposants").eq("id", editionId).single();
+  const consignes = (ed.data?.consignes_exposants || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lignes = consignes.length ? consignes : CONSIGNES;
   const salleNom = (id) => (salles.data ?? []).find((s) => s.id === id)?.nom || "";
   const partners = (oe.data ?? []).filter((o) => o.organismes)
     .sort((a, b) => a.organismes.nom.localeCompare(b.organismes.nom, "fr"));
@@ -39,7 +43,10 @@ export async function exportFiches(editionId, editionNom) {
     doc.setDrawColor(210); doc.line(20, y, 190, y); y += 12;
     doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text("Consignes d'accueil", 20, y); y += 9;
     doc.setFont("helvetica", "normal"); doc.setFontSize(12); doc.setTextColor(70);
-    CONSIGNES.forEach((l) => { doc.text("•  " + l, 24, y, { maxWidth: 160 }); y += 9; });
+    lignes.forEach((l) => {
+      const morceaux = doc.splitTextToSize("•  " + l, 160);
+      doc.text(morceaux, 24, y); y += 6 * morceaux.length + 3;
+    });
   });
   if (!partners.length) { doc.setFontSize(12); doc.text("Aucun partenaire pour cette édition.", 20, 20); }
   doc.save(`fiches-accueil-${slug(editionNom)}.pdf`);
