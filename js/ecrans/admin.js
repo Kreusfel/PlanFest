@@ -1,14 +1,12 @@
-// Écran #/admin — Phase 0 (étape C). Admin seulement.
-// Membres & pôles, invitations, import du plan depuis la maquette, export JSON.
+// Écran #/admin — admin seulement : membres et pôles, invitations.
 import { supa } from "../supabase.js";
 import { session, isAdmin, sendInvitation } from "../auth.js";
-import { store } from "../store.js";
-import { esc, plur, aujourdhui, telecharger, toast } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
 
-let root, poles = [], members = [], invitations = [], versions = [], edNom = "";
+let root, poles = [], members = [], invitations = [];
 
 const HEAD = `<div class="page-head"><div><h1>Administration</h1>
-  <div class="sub">Comptes, invitations et données du plan.</div></div></div>`;
+  <div class="sub">Comptes et invitations.</div></div></div>`;
 
 export async function render(container) {
   root = container;
@@ -41,36 +39,14 @@ async function loadRefs() {
   });
   members = (prof.data ?? []).map((m) => ({ ...m, poleIds: byProfil.get(m.id) ?? new Set() }));
 
-  if (store.editionId) {
-    const [v, ed] = await Promise.all([
-      supa.from("versions_plan").select("id,nom,cree_le").eq("edition_id", store.editionId).order("cree_le", { ascending: false }),
-      supa.from("editions").select("nom").eq("id", store.editionId).single(),
-    ]);
-    versions = v.data ?? []; edNom = ed.data?.nom || "";
-  } else { versions = []; edNom = ""; }
 }
 
 const poleNom = (id) => poles.find((p) => p.id === id)?.nom ?? "?";
 
 /* ---------- rendu ---------- */
 function draw() {
-  root.innerHTML = HEAD + cardMembres() + cardInvitations() + cardVersions() + cardDonnees();
+  root.innerHTML = HEAD + cardMembres() + cardInvitations();
   wire();
-}
-
-function cardVersions() {
-  if (!store.editionId) return `<div class="card admin-sec"><h2>Versions du plan</h2>
-    <p class="muted">Ouvre une édition (dans « Plan des salles ») pour figer son plan.</p></div>`;
-  const rows = versions.map((v) => `<div class="row">
-      <div class="row-main"><b>${esc(v.nom)}</b>
-        <span class="muted">${esc((v.cree_le || "").slice(0, 16).replace("T", " "))}</span></div>
-      <div class="actions"><button class="btn small" data-restore="${v.id}">Restaurer</button></div>
-    </div>`).join("") || `<p class="muted">Aucune version figée.</p>`;
-  return `<div class="card admin-sec"><h2>Versions du plan</h2>
-    <p class="mini">Fige l'état actuel du plan (salles, tables, repères) pour pouvoir y revenir.</p>
-    <button class="btn" id="fig-now">Figer le plan maintenant</button>
-    <div class="list" style="margin-top:12px">${rows}</div>
-    <p class="msg" id="v-msg"></p></div>`;
 }
 
 function cardMembres() {
@@ -133,23 +109,6 @@ function cardInvitations() {
     <p class="msg" id="inv-msg" aria-live="polite"></p></div>`;
 }
 
-function cardDonnees() {
-  return `<div class="card admin-sec"><h2>Plan : import / export</h2>
-    <p class="mini">L'édition courante est celle ouverte dans « Plan des salles ».</p>
-    <h3>Exporter</h3>
-    <button class="btn" id="exp-go">Exporter le plan (JSON)</button>
-    <p class="mini">Liste de montage : écran Plan des salles. Étiquettes et fiches d'accueil : écran Répartition tables.</p>
-    <hr>
-    <h3>Importer depuis l'ancienne maquette</h3>
-    <p class="mini">Reprend les salles et le plan (tables + repères) d'un export PlanFest localStorage.
-      Les tables « libres » deviennent « à attribuer ». N'écrase rien : ajoute de nouvelles salles.</p>
-    <label>Fichier JSON<input type="file" id="imp-file" accept="application/json,.json"></label>
-    <label>…ou coller le JSON<textarea id="imp-json" rows="4" placeholder='{"festivals":[…]}'></textarea></label>
-    <label>Festival à importer<select id="imp-fest"><option value="">— charger un JSON d'abord —</option></select></label>
-    <button class="btn primary" id="imp-go">Importer dans l'édition courante</button>
-    <p class="msg" id="imp-msg" aria-live="polite"></p></div>`;
-}
-
 /* ---------- câblage ---------- */
 function wire() {
   // Écouteurs délégués attachés une seule fois sur root (draw() peut être rappelé).
@@ -158,52 +117,18 @@ function wire() {
     root.addEventListener("change", onChange);
     root.__adminWired = true;
   }
-  // Ces champs sont recréés à chaque draw() : on (ré)attache leurs écouteurs propres.
-  const file = document.getElementById("imp-file");
-  if (file) file.addEventListener("change", onFile);
-  const box = document.getElementById("imp-json");
-  if (box) box.addEventListener("input", refreshFestSelect);
 }
 
 async function onClick(e) {
-  const b = e.target.closest("[data-act],[data-restore],#inv-create,#exp-go,#imp-go,#fig-now");
+  const b = e.target.closest("[data-act],#inv-create");
   if (!b) return;
   if (b.id === "inv-create") return createInvitation();
-  if (b.id === "exp-go") return exportPlan();
-  if (b.id === "imp-go") return importPlan();
-  if (b.id === "fig-now") return figer();
-  if (b.dataset.restore) return restaurer(b.dataset.restore);
   const act = b.dataset.act, id = b.dataset.id;
   if (act === "actif") await upd("profils", id, { actif: b.dataset.v === "1" });
   else if (act === "role") await upd("profils", id, { role: b.dataset.v });
   else if (act === "inv-del") await del("invitations", id);
   else if (act === "compte-del") await supprimerCompte(members.find((m) => m.id === id));
   else if (act === "inv-send") await envoyer(invitations.find((i) => i.id === id)?.email);
-}
-
-async function figer() {
-  const msg = document.getElementById("v-msg");
-  const nom = prompt("Nom de la version ?", "Plan " + aujourdhui());
-  if (!nom) return;
-  if (msg) msg.textContent = "Figement…";
-  const { error } = await supa.rpc("figer_plan", { p_edition: store.editionId, p_nom: nom });
-  if (error) { if (msg) msg.textContent = "Erreur : " + error.message; return; }
-  await reload();
-}
-async function restaurer(id) {
-  // Annoncer ce qui serait perdu : les parties des tables absentes de la version.
-  const imp = await supa.rpc("restauration_impact", { p_version: id });
-  if (imp.error) { toast("Erreur : " + imp.error.message); return; }
-  const { tables_retirees: t = 0, parties_perdues: p = 0 } = imp.data?.[0] ?? {};
-  let txt = "Restaurer cette version ? Le plan actuel de l'édition sera remplacé.";
-  if (t) txt += `\n\n${t} élément(s) du plan actuel n'existe(nt) pas dans cette version et seront retirés`
-    + (p ? `, avec ${p} partie(s) programmée(s) et leurs inscriptions.` : ".");
-  else txt += "\n\nLes parties programmées sont conservées.";
-  if (!confirm(txt)) return;
-  const { error } = await supa.rpc("restaurer_plan", { p_version: id });
-  if (error) { toast("Erreur : " + error.message); return; }
-  toast("Plan restauré. Rouvre « Plan des salles » pour le voir.", "ok");
-  await reload();
 }
 
 async function onChange(e) {
@@ -259,81 +184,4 @@ async function envoyer(email) {
   if (m) m.textContent = "Envoi à " + email + "…";
   const r = await sendInvitation(email);
   if (m) m.textContent = r.error ? "Échec de l'envoi : " + r.error.message : "E-mail envoyé à " + email + ".";
-}
-
-/* ---------- export ---------- */
-async function exportPlan() {
-  const msg = document.getElementById("imp-msg");
-  if (!store.editionId) { msg.textContent = "Aucune édition courante (ouvre-en une dans « Plan des salles »)."; return; }
-  const [s, el] = await Promise.all([
-    supa.from("salles").select("*").eq("edition_id", store.editionId),
-    supa.from("elements").select("*").eq("edition_id", store.editionId),
-  ]);
-  if (s.error || el.error) { msg.textContent = "Erreur export."; return; }
-  const out = { kind: "planfest-edition", edition_id: store.editionId,
-    exporte_le: new Date().toISOString(), salles: s.data ?? [], elements: el.data ?? [] };
-  telecharger("plan-" + store.editionId.slice(0, 8) + ".json", JSON.stringify(out, null, 2), "application/json");
-  msg.textContent = `Exporté : ${plur((s.data ?? []).length, "salle", "salles")}, ${plur((el.data ?? []).length, "élément", "éléments")}.`;
-}
-
-/* ---------- import depuis la maquette ---------- */
-function onFile(e) {
-  const f = e.target.files?.[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = () => { document.getElementById("imp-json").value = r.result; refreshFestSelect(); };
-  r.readAsText(f);
-}
-function parseFestivals() {
-  const raw = document.getElementById("imp-json").value.trim();
-  if (!raw) return [];
-  let obj; try { obj = JSON.parse(raw); } catch { return null; } // null = JSON invalide
-  if (Array.isArray(obj.festivals)) return obj.festivals.map((f) => ({ nom: f.nom || "Festival", data: f.data }));
-  if (obj.data && obj.data.salles) return [{ nom: obj.nom || "Festival", data: obj.data }];
-  if (Array.isArray(obj.salles)) return [{ nom: "Festival", data: obj }];
-  return [];
-}
-function refreshFestSelect() {
-  const sel = document.getElementById("imp-fest"), msg = document.getElementById("imp-msg");
-  const fests = parseFestivals();
-  if (fests === null) { sel.innerHTML = `<option value="">— JSON invalide —</option>`; msg.textContent = "JSON illisible."; return; }
-  if (!fests.length) { sel.innerHTML = `<option value="">— aucun festival trouvé —</option>`; msg.textContent = ""; return; }
-  sel.innerHTML = fests.map((f, i) => {
-    const n = (f.data?.items ?? []).length, ns = (f.data?.salles ?? []).length;
-    return `<option value="${i}">${esc(f.nom)} — ${plur(ns, "salle", "salles")}, ${plur(n, "élément", "éléments")}</option>`;
-  }).join("");
-  msg.textContent = "";
-}
-async function importPlan() {
-  const msg = document.getElementById("imp-msg");
-  if (!store.editionId) { msg.textContent = "Aucune édition courante (ouvre-en une dans « Plan des salles »)."; return; }
-  const fests = parseFestivals();
-  if (!fests || !fests.length) { msg.textContent = "Rien à importer."; return; }
-  const idx = parseInt(document.getElementById("imp-fest").value, 10) || 0;
-  const data = fests[idx]?.data;
-  if (!data || !Array.isArray(data.salles) || !data.salles.length) { msg.textContent = "Ce festival n'a pas de salle."; return; }
-  msg.textContent = "Import…";
-  try {
-    const map = {};
-    for (const s of data.salles) {
-      const { data: ns, error } = await supa.from("salles")
-        .insert({ edition_id: store.editionId, nom: s.nom || "Salle",
-          cols: Math.max(1, s.cols | 0), rows: Math.max(1, s.rows | 0) }).select().single();
-      if (error) throw error;
-      map[s.id] = ns.id;
-    }
-    const rows = (data.items ?? []).filter((it) => map[it.salle]).map((it) => {
-      const base = { edition_id: store.editionId, salle_id: map[it.salle], kind: it.kind,
-        x: it.x | 0, y: it.y | 0, w: Math.max(1, it.w | 0), h: Math.max(1, it.h | 0) };
-      if (it.kind === "table") {
-        const tt = it.type === "partenaire" ? "partenaire" : it.type === "jurande" ? "jurande" : "non_attribuee";
-        return { ...base, numero: String(it.numero ?? ""), type_table: tt, mode: "animee",
-          chaises: it.chaises | 0, notes: it.notes || null };
-      }
-      return { ...base, kind: "bloc", sous: it.sous || "autre", label: it.label || null };
-    });
-    if (rows.length) { const { error } = await supa.from("elements").insert(rows); if (error) throw error; }
-    msg.textContent = `Importé : ${plur(data.salles.length, "salle", "salles")}, ${plur(rows.length, "élément", "éléments")}. Ouvre « Plan des salles ».`;
-  } catch (e) {
-    msg.textContent = "Erreur import : " + (e.message || e);
-  }
 }
