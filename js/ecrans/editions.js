@@ -6,11 +6,43 @@ import { esc } from "../ui/util.js";
 import { qrSVG } from "../export/qr.js";
 
 const ETATS = { preparation: "En préparation", figee: "Figée", cloturee: "Clôturée" };
+const JOURS = [["ven", "Vendredi"], ["sam", "Samedi"], ["dim", "Dimanche"]];
+const hm = (t) => (t ? String(t).slice(0, 5) : "");
+
+// Horaires d'ouverture par « édition|jour » (table horaires_ouverture, partagée avec
+// l'écran Animations où le pôle bénévoles peut aussi les modifier).
+let horaires = {};
+
+// Réglages d'une édition : jours actifs, horaires d'ouverture par jour, limite matin
+// (sert aux suggestions d'animateurs : avant = matin, après = après-midi).
+function reglagesForm(e) {
+  const actifs = e.jours_actifs?.length ? e.jours_actifs : ["sam", "dim"];
+  const lignes = JOURS.map(([j, lbl]) => {
+    const h = horaires[`${e.id}|${j}`] || {};
+    return `<div class="reg-jour">
+      <span class="chk-inline"><input type="checkbox" data-rjour="${e.id}" value="${j}" aria-label="${lbl} actif"${actifs.includes(j) ? " checked" : ""}> <b>${lbl}</b></span>
+      <label>Ouverture<input type="time" data-rdeb="${e.id}|${j}" value="${hm(h.debut)}"></label>
+      <label>Fermeture<input type="time" data-rfin="${e.id}|${j}" value="${hm(h.fin)}"></label>
+    </div>`;
+  }).join("");
+  return `<details class="pub-editor"><summary>Réglages (jours, horaires)</summary>
+    <p class="mini">Jours cochés = jours du festival : ils apparaissent dans Animations, Accueil, Présences et Sur le terrain.
+      Vendredi = journée intergénérationnelle et mise en place.</p>
+    ${lignes}
+    <label>Limite matin / après-midi<input type="time" data-rlim="${e.id}" value="${hm(e.limite_matin) || "13:00"}"></label>
+    <p class="mini">Sert à proposer des animateurs selon leurs disponibilités (matin / après-midi).</p>
+    <button class="btn primary" data-saveregl="${e.id}">Enregistrer les réglages</button>
+  </details>`;
+}
 
 export async function render(c) {
   c.innerHTML = `<div class="page-head"><div><h1>Éditions</h1></div></div><div class="card"><p class="muted">Chargement…</p></div>`;
-  const { data, error } = await supa
-    .from("editions").select("*").order("date_samedi", { ascending: false });
+  const [{ data, error }, hor] = await Promise.all([
+    supa.from("editions").select("*").order("date_samedi", { ascending: false }),
+    supa.from("horaires_ouverture").select("edition_id,jour,debut,fin"),
+  ]);
+  horaires = {};
+  (hor.data ?? []).forEach((h) => { horaires[`${h.edition_id}|${h.jour}`] = h; });
   if (error) {
     c.innerHTML = `<div class="page-head"><div><h1>Éditions</h1></div></div><div class="card"><p class="msg">Erreur : ${esc(error.message)}</p></div>`;
     return;
@@ -23,6 +55,7 @@ export async function render(c) {
         <b>${esc(e.nom)}${e.programme_publie ? ' <span class="pill ok">publié</span>' : ""}</b>
         <span class="muted">samedi ${esc(e.date_samedi)} · ${ETATS[e.etat] || e.etat}</span>
         ${e.programme_publie ? `<span class="mini">Programme public : <a href="#/public/programme/${e.id}">ouvrir</a> · <button class="link" data-copy="${esc(lien(e.id))}">copier le lien</button></span><div class="qr" title="QR du programme public">${qrSVG(lien(e.id))}</div>` : ""}
+        ${isAdmin() ? reglagesForm(e) : ""}
         ${isAdmin() ? `<details class="pub-editor"><summary>Contenu public (visiteurs)</summary>
           <label>Texte de présentation (activités, food trucks, partenaires…)
             <textarea data-pres="${e.id}" placeholder="Décris le festival pour les visiteurs…">${esc(e.presentation || "")}</textarea></label>
@@ -103,6 +136,43 @@ export async function render(c) {
     const { error } = await supa.from("editions").update({ etat: "cloturee" }).eq("id", b.dataset.close);
     msg.textContent = error ? "Erreur : " + error.message : "Édition clôturée.";
     if (!error) reload();
+  }));
+
+  c.querySelectorAll("[data-saveregl]").forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.saveregl;
+    const ed = (data ?? []).find((x) => x.id === id) || {};
+    const jours = [...c.querySelectorAll(`[data-rjour="${id}"]:checked`)].map((x) => x.value);
+    if (!jours.length) { msg.textContent = "Coche au moins un jour."; return; }
+    const lignes = [];
+    for (const [j, lbl] of JOURS) {
+      const debut = c.querySelector(`[data-rdeb="${id}|${j}"]`)?.value || null;
+      const fin = c.querySelector(`[data-rfin="${id}|${j}"]`)?.value || null;
+      if (debut && fin && fin <= debut) { msg.textContent = `${lbl} : la fermeture doit être après l'ouverture.`; return; }
+      const avant = horaires[`${id}|${j}`] || {};
+      // N'écrit que ce qui a changé (pas de ligne vide créée pour rien).
+      if ((debut || "") !== hm(avant.debut) || (fin || "") !== hm(avant.fin)) lignes.push({ edition_id: id, jour: j, debut, fin });
+    }
+    const limite = c.querySelector(`[data-rlim="${id}"]`)?.value || "13:00";
+
+    // Retirer un jour masque ce qui y est programmé : prévenir avant.
+    const retires = (ed.jours_actifs?.length ? ed.jours_actifs : ["sam", "dim"]).filter((j) => !jours.includes(j));
+    if (retires.length) {
+      const [pa, pe] = await Promise.all([
+        supa.from("parties").select("id", { count: "exact", head: true }).eq("edition_id", id).in("jour", retires),
+        supa.from("permanences").select("id", { count: "exact", head: true }).eq("edition_id", id).in("jour", retires),
+      ]);
+      const n = (pa.count || 0) + (pe.count || 0);
+      if (n && !confirm(`${n} partie(s) ou permanence(s) sont prévues sur le(s) jour(s) retiré(s). Elles ne seront plus affichées (mais pas supprimées). Continuer ?`)) return;
+    }
+
+    msg.textContent = "Enregistrement…";
+    const [r1, r2] = await Promise.all([
+      supa.from("editions").update({ jours_actifs: JOURS.map(([j]) => j).filter((j) => jours.includes(j)), limite_matin: limite }).eq("id", id),
+      lignes.length ? supa.from("horaires_ouverture").upsert(lignes, { onConflict: "edition_id,jour" }) : Promise.resolve({ error: null }),
+    ]);
+    if (r1.error || r2.error) { msg.textContent = "Erreur : " + (r1.error || r2.error).message; return; }
+    msg.textContent = "Réglages enregistrés.";
+    reload();
   }));
 
   c.querySelectorAll("[data-savepub]").forEach((b) => (b.onclick = async () => {
