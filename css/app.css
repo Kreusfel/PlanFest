@@ -405,6 +405,8 @@ input[type=color]{padding:3px;height:44px}
   max-width:min(520px,calc(100vw - 32px));padding:12px 16px;border-radius:10px;font-size:14px;font-weight:600;
   box-shadow:0 6px 24px rgba(0,0,0,.18);background:var(--alert-bg);color:var(--alert);border:1px solid var(--alert)}
 .toast.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.toast.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.besoin-cell{display:flex;align-items:center;gap:6px}
 .toast[hidden]{display:none}
 .dup-form{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
 .dup-form[hidden]{display:none}

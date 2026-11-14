@@ -17,6 +17,7 @@ const ALERTE_LBL = {
   places: "Trop de places", jeu_hors_categorie: "Hors catégorie",
   exemplaires: "Trop d'exemplaires", indisponible: "Indisponible",
 };
+let besoins = [], dispos = new Map();  // besoins_equipes ; dispos : benevole_edition_id → Set("jour|demi")
 let root, ed = null, bens = [], anims = [], jeux = [], tables = [], salles = [], parts = [], alertes = {}, horaires = {}, postes = [], perms = [], inscParts = new Map();
 let jour = "sam", tab = "couv", lastPoste = "", selTables = new Set(), suggestId = null, suggestList = [];
 const canWrite = () => isAdmin() || hasPole("animateurs_benevoles");
@@ -34,10 +35,10 @@ export async function render(container) {
 async function load() {
   const edi = store.editionId;
   const [e, be, el, bq, pm, s, pa, h, je, al, pi] = await Promise.all([
-    supa.from("editions").select("id,nom,jours_actifs").eq("id", edi).single(),
+    supa.from("editions").select("id,nom,jours_actifs,limite_matin").eq("id", edi).single(),
     supa.from("benevoles_editions").select("id,statut,est_animateur,equipes,benevoles(nom)").eq("edition_id", edi),
     supa.from("elements").select("id,numero,type_table,mode,kind,sous,label,salle_id,x,y,w,h,chaises").eq("edition_id", edi).in("kind", ["table", "bloc"]),
-    supa.from("besoins_equipes").select("equipe").eq("edition_id", edi),
+    supa.from("besoins_equipes").select("equipe,jour,demi_journee,nombre_requis").eq("edition_id", edi),
     supa.from("permanences").select("id,benevole_edition_id,poste,jour,debut,fin,element_id").eq("edition_id", edi),
     supa.from("salles").select("id,nom,cols,rows").eq("edition_id", edi).order("cree_le"),
     supa.from("parties").select("id,element_id,jour,debut,duree_min,fin,titre,places,jeu_edition_id,benevole_edition_id,jeux_editions(jeux(titre)),benevoles_editions(benevoles(nom))").eq("edition_id", edi),
@@ -67,6 +68,48 @@ async function load() {
   (pm.data || []).forEach((p) => set.add(p.poste));
   postes = [...set].filter(Boolean).sort((a, b) => a.localeCompare(b, "fr"));
   perms = pm.data || [];
+  besoins = bq.data || [];
+  // Disponibilités (grille de la fiche bénévole) : seulement celles cochées.
+  dispos = new Map();
+  const ids = act.map((b) => b.id);
+  if (ids.length) {
+    const d = await supa.from("disponibilites").select("benevole_edition_id,jour,demi_journee,disponible").in("benevole_edition_id", ids);
+    (d.data || []).forEach((x) => {
+      if (!dispos.has(x.benevole_edition_id)) dispos.set(x.benevole_edition_id, new Set());
+      if (x.disponible) dispos.get(x.benevole_edition_id).add(`${x.jour}|${x.demi_journee}`);
+    });
+  }
+}
+
+/* ---------- demi-journées, disponibilités, conflits ---------- */
+// matin : avant la limite de l'édition (13 h) ; après-midi : jusqu'à 18 h ; soir : après
+// 18 h, seulement le dimanche (rangement), comme la grille de disponibilités.
+const SOIR = 18 * 60;
+const DEMI_LBL = { matin: "matin", aprem: "après-midi", soir: "soir" };
+const demisDuJour = (j) => (j === "dim" ? ["matin", "aprem", "soir"] : ["matin", "aprem"]);
+function demis(j, debut, fin) {
+  const lim = toMin(ed.limite_matin) ?? 13 * 60, a = toMin(debut), b = toMin(fin);
+  const res = [];
+  if (a < lim) res.push("matin");
+  if (b > lim && a < (j === "dim" ? SOIR : 24 * 60)) res.push("aprem");
+  if (j === "dim" && b > SOIR) res.push("soir");
+  return res;
+}
+const chevauche = (a1, b1, a2, b2) => toMin(a1) < toMin(b2) && toMin(a2) < toMin(b1);
+// Problèmes d'une permanence attribuée : indisponible (si la personne a rempli sa grille)
+// ou déjà prise au même moment (autre permanence ou partie).
+function problemes(p) {
+  if (!p.benevole_edition_id) return [];
+  const out = [];
+  const d = dispos.get(p.benevole_edition_id);
+  if (d && d.size) {
+    const manque = demis(p.jour, p.debut, p.fin).filter((x) => !d.has(`${p.jour}|${x}`));
+    if (manque.length) out.push("Pas dispo " + manque.map((x) => DEMI_LBL[x]).join(" / "));
+  }
+  const autrePerm = perms.some((q) => q.id !== p.id && q.benevole_edition_id === p.benevole_edition_id && q.jour === p.jour && chevauche(p.debut, p.fin, q.debut, q.fin));
+  const partie = parts.some((q) => q.benevole_edition_id === p.benevole_edition_id && q.jour === p.jour && chevauche(p.debut, p.fin, q.debut, q.fin));
+  if (autrePerm || partie) out.push("Déjà pris à cette heure" + (partie ? " (partie)" : ""));
+  return out;
 }
 
 const benNom = (id) => bens.find((b) => b.id === id)?.nom || "";
@@ -259,6 +302,10 @@ function permTab() {
     ${chips}<p class="msg" id="f-msg" aria-live="polite"></p></div>`;
 
   const dayPerms = perms.filter((p) => p.jour === jour);
+  const autresJours = (ed.jours_actifs || ["sam", "dim"]).filter((d) => d !== jour);
+  const copie = canWrite() && dayPerms.length && autresJours.length ? `<div class="card"><div class="filters" style="align-items:flex-end">
+      <label>Copier les créneaux de ce jour vers<select id="cp-jour">${autresJours.map((d) => `<option value="${d}">${esc(JOURS[d] || d)}</option>`).join("")}</select></label>
+      <button class="btn" id="cp-go">Copier (sans les bénévoles)</button></div></div>` : "";
   const used = [...new Set(dayPerms.map((p) => p.poste))].sort((a, b) => a.localeCompare(b, "fr"));
   const benOpts = (sel) => `<option value="">— non attribué —</option>` + bens.map((b) => `<option value="${b.id}"${b.id === sel ? " selected" : ""}>${esc(b.nom)}</option>`).join("");
   const sections = used.map((poste) => {
@@ -267,11 +314,35 @@ function permTab() {
       <div class="scroll"><table class="data-table"><thead><tr><th>Horaire</th><th>Bénévole</th><th>Table</th><th></th></tr></thead>
       <tbody>${rows.map((r) => `<tr>
         <td><b>${hhmm(r.debut)}–${hhmm(r.fin)}</b></td>
-        <td><select data-setben="${r.id}" style="min-width:150px;margin:0">${benOpts(r.benevole_edition_id)}</select></td>
+        <td><select data-setben="${r.id}" style="min-width:150px;margin:0"${canWrite() ? "" : " disabled"}>${benOpts(r.benevole_edition_id)}</select>
+          ${problemes(r).map((x) => `<div><span class="pill alert">${esc(x)}</span></div>`).join("")}</td>
         <td>${r.element_id ? esc(locLabel(r.element_id)) : `<span class="muted">—</span>`}</td>
         <td style="text-align:right"><button class="btn small danger" data-del="${r.id}">Suppr.</button></td></tr>`).join("")}</tbody></table></div></div>`;
   }).join("");
-  return form + (used.length ? sections : `<div class="card"><p class="muted">Aucune permanence ${esc(JOURS[jour] || jour)}. Ajoute un créneau ci-dessus.</p></div>`);
+  return form + besoinsCard(dayPerms) + copie + (used.length ? sections : `<div class="card"><p class="muted">Aucune permanence ${esc(JOURS[jour] || jour)}. Ajoute un créneau ci-dessus.</p></div>`);
+}
+
+// Besoins par poste et demi-journée (table besoins_equipes) et couverture : nombre de
+// bénévoles différents attribués sur ce poste pendant la demi-journée.
+function besoinsCard(dayPerms) {
+  const ds = demisDuJour(jour);
+  const postesJour = [...new Set([...dayPerms.map((p) => p.poste), ...besoins.filter((b) => b.jour === jour).map((b) => b.equipe)])]
+    .sort((a, b) => a.localeCompare(b, "fr"));
+  const requis = (poste, d) => besoins.find((b) => b.equipe === poste && b.jour === jour && b.demi_journee === d)?.nombre_requis || 0;
+  const couverts = (poste, d) => new Set(dayPerms.filter((p) => p.poste === poste && p.benevole_edition_id && demis(jour, p.debut, p.fin).includes(d))
+    .map((p) => p.benevole_edition_id)).size;
+  const ro = canWrite() ? "" : " disabled";
+  const rows = postesJour.map((poste) => `<tr><td><b>${esc(poste)}</b></td>${ds.map((d) => {
+    const n = requis(poste, d), c = couverts(poste, d);
+    const tag = n ? `<span class="tag ${c >= n ? "ok" : c ? "warn" : "bad"}">${c}/${n}</span>` : (c ? `<span class="muted">${c}</span>` : "");
+    return `<td><div class="besoin-cell"><input type="number" min="0" value="${n || ""}" placeholder="0" data-besoin="${esc(poste)}|${d}" aria-label="Besoin ${esc(poste)} ${DEMI_LBL[d]}" style="width:64px;margin:0"${ro}>${tag}</div></td>`;
+  }).join("")}</tr>`).join("") || `<tr><td colspan="${ds.length + 1}" class="muted">Aucun poste ce jour : ajoute un créneau ou un besoin.</td></tr>`;
+  return `<div class="card"><div class="ihead"><h3>Besoins — ${esc(JOURS[jour] || jour)}</h3></div>
+    <div class="scroll"><table class="data-table"><thead><tr><th>Poste</th>${ds.map((d) => `<th>${esc(DEMI_LBL[d])}</th>`).join("")}</tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    ${canWrite() ? `<div class="filters" style="align-items:flex-end;margin-top:8px"><label>Nouveau poste<input list="postes-dl" id="b-poste" placeholder="Accueil, Buvette…"></label>
+      <button class="btn small" id="b-add">Ajouter aux besoins</button></div>` : ""}
+    <p class="mini">Nombre de personnes voulues par demi-journée ; à côté, combien sont attribuées (matin jusqu'à ${esc(hhmm(ed.limite_matin) || "13:00")}, soir après 18:00 le dimanche).</p></div>`;
 }
 
 /* ---------- câblage ---------- */
@@ -302,6 +373,12 @@ function wire() {
   }));
   root.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => delPerm(b.dataset.del)));
   root.querySelectorAll("[data-setben]").forEach((s) => (s.onchange = () => setBen(s.dataset.setben, s.value || null)));
+  root.querySelectorAll("[data-besoin]").forEach((i) => (i.onchange = () => setBesoin(i.dataset.besoin, i.value)));
+  const ba = root.querySelector("#b-add"); if (ba) ba.onclick = () => {
+    const poste = (root.querySelector("#b-poste").value || "").trim();
+    if (poste) setBesoin(`${poste}|matin`, "1");
+  };
+  const cp = root.querySelector("#cp-go"); if (cp) cp.onclick = copierJour;
 }
 
 async function runPdf(btn, fn) {
@@ -370,4 +447,34 @@ async function setBen(id, ben) {
   if (error) return toast("Erreur : " + error.message);
   const p = perms.find((x) => x.id === id); if (p) p.benevole_edition_id = ben;
   draw();
+  const pb = p ? problemes(p) : [];
+  if (pb.length) toast(`Attention, ${benNom(ben)} : ${pb.join(", ").toLowerCase()}.`, "warn");
+}
+
+async function setBesoin(key, val) {
+  const i = key.lastIndexOf("|"), equipe = key.slice(0, i), demi = key.slice(i + 1);
+  const n = Math.max(0, parseInt(val, 10) || 0);
+  const q = n
+    ? supa.from("besoins_equipes").upsert({ edition_id: store.editionId, equipe, jour, demi_journee: demi, nombre_requis: n }, { onConflict: "edition_id,equipe,jour,demi_journee" })
+    : supa.from("besoins_equipes").delete().eq("edition_id", store.editionId).eq("equipe", equipe).eq("jour", jour).eq("demi_journee", demi);
+  const { error } = await q;
+  if (error) return toast("Erreur : " + error.message);
+  besoins = besoins.filter((b) => !(b.equipe === equipe && b.jour === jour && b.demi_journee === demi));
+  if (n) besoins.push({ equipe, jour, demi_journee: demi, nombre_requis: n });
+  if (!postes.includes(equipe)) postes.push(equipe), postes.sort((a, b) => a.localeCompare(b, "fr"));
+  draw();
+}
+
+// Recopie les créneaux du jour affiché vers un autre jour, sans les bénévoles.
+async function copierJour() {
+  const cible = root.querySelector("#cp-jour")?.value; if (!cible) return;
+  const src = perms.filter((p) => p.jour === jour);
+  const deja = perms.filter((p) => p.jour === cible).length;
+  if (!confirm(`Copier ${src.length} créneau(x) vers ${JOURS[cible] || cible}, sans bénévole ?${deja ? `\n\n${deja} créneau(x) existent déjà ce jour-là : ils sont gardés (risque de doublons).` : ""}`)) return;
+  const rows = src.map((p) => ({ edition_id: store.editionId, poste: p.poste, jour: cible, debut: p.debut, fin: p.fin, element_id: p.element_id, benevole_edition_id: null }));
+  const { data, error } = await supa.from("permanences").insert(rows).select();
+  if (error) return toast("Erreur : " + error.message);
+  perms.push(...(data || []));
+  jour = cible; draw();
+  toast(`${rows.length} créneau(x) copiés : il reste à attribuer les bénévoles.`, "ok");
 }
