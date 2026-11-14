@@ -2,7 +2,7 @@
 import { supa } from "../supabase.js";
 import { isAdmin, hasPole, sendInvitation } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur } from "../ui/util.js";
+import { esc, plur, toast } from "../ui/util.js";
 
 const STATUTS = [["inscrit", "Inscrit"], ["confirme", "Confirmé"], ["annule", "Annulé"]];
 const JOURS = [["ven", "Vendredi"], ["sam", "Samedi"], ["dim", "Dimanche"]];
@@ -16,6 +16,7 @@ const DISPO_COLS = [["matin", "Matin"], ["aprem", "Après-midi"], ["soir", "Soir
 
 let root, list = [], poles = [], jours = ["sam", "dim"], dispos = {}, regimeBe = "", loadErr = "";
 let filt = { q: "", statut: "", equipe: "", anim: false };
+let anciens = [];  // bénévoles d'éditions passées qui acceptent d'être recontactés
 let view = { mode: "list", id: null };
 
 // Équipes « terrain » (jour J) en plus des pôles — permet p.ex. l'équipe accueil.
@@ -52,7 +53,8 @@ async function load() {
 }
 
 function go() {
-  root.innerHTML = view.mode === "fiche" ? ficheView() : view.mode === "new" ? newView() : listView();
+  root.innerHTML = view.mode === "fiche" ? ficheView() : view.mode === "new" ? newView()
+    : view.mode === "reprise" ? repriseView() : listView();
 }
 
 /* ---------- liste ---------- */
@@ -88,7 +90,8 @@ function listView() {
 
   return `<div class="page-head"><div><h1>Bénévoles</h1>
     <div class="sub">${plur(list.length, "inscrit", "inscrits")} · ${plur(nc, "confirmé", "confirmés")} · ${plur(na, "animateur", "animateurs")}</div></div>
-    <div class="head-actions">${canWrite() ? `<button class="btn primary" id="new-ben">+ Nouveau bénévole</button>` : ""}</div></div>
+    <div class="head-actions">${canWrite() ? `<button class="btn" id="reprise">Reprendre d'anciens bénévoles</button>
+      <button class="btn primary" id="new-ben">+ Nouveau bénévole</button>` : ""}</div></div>
     <div class="card">
       <div class="filters">
         <input id="f-q" class="grow" placeholder="Rechercher…" value="${esc(filt.q)}">
@@ -119,6 +122,66 @@ function disposGrid(ro) {
   }).join("");
   return `<table class="dispo-grid">${head}${body}</table>
     <p class="mini">Vendredi = mise en place · dimanche soir = rangement.</p>`;
+}
+
+/* ---------- reprise des anciens bénévoles ---------- */
+// Personnes venues à une édition passée, qui ont accepté d'être recontactées et ne sont
+// pas encore inscrites ici. On coche celles qui reviennent : elles sont ajoutées avec
+// leurs équipes et leur rôle d'animateur de la dernière fois, au statut « Inscrit ».
+async function chargerAnciens() {
+  const { data, error } = await supa.from("benevoles")
+    .select("id, nom, email, telephone, benevoles_editions(edition_id, equipes, est_animateur, statut, editions(nom, date_samedi))")
+    .eq("recontacter", true);
+  if (error) { loadErr = error.message; anciens = []; return; }
+  const ici = new Set(list.map((be) => be.benevole_id));
+  anciens = (data ?? []).filter((b) => !ici.has(b.id))
+    .map((b) => {
+      const passees = (b.benevoles_editions || []).filter((x) => x.edition_id !== store.editionId && x.statut !== "annule")
+        .sort((x, y) => (y.editions?.date_samedi || "").localeCompare(x.editions?.date_samedi || ""));
+      return { ...b, derniere: passees[0] || null };
+    })
+    .filter((b) => b.derniere)
+    .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+}
+function repriseView() {
+  const rows = anciens.map((b) => `<tr>
+      <td><input type="checkbox" data-rep="${b.id}" aria-label="Reprendre ${esc(b.nom)}"></td>
+      <td><strong>${esc(b.nom)}</strong>${b.derniere.est_animateur ? ' <span class="tag ok">animateur</span>' : ""}</td>
+      <td class="muted">${esc(b.email || b.telephone || "—")}</td>
+      <td>${(b.derniere.equipes || []).map((e) => `<span class="chip">${esc(poleNom(e))}</span>`).join(" ") || `<span class="muted">—</span>`}</td>
+      <td class="muted">${esc(b.derniere.editions?.nom || "")}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="muted">${loadErr ? "Erreur : " + esc(loadErr) : "Personne à reprendre : aucun ancien bénévole n'a accepté d'être recontacté, ou ils sont déjà inscrits."}</td></tr>`;
+  return `<div class="page-head"><div><h1>Reprendre d'anciens bénévoles</h1>
+    <div class="sub">${plur(anciens.length, "personne", "personnes")} d'éditions passées, d'accord pour être recontactées</div></div>
+    <div class="head-actions"><button class="btn" id="cancel">← Liste</button></div></div>
+    <div class="card">
+      <p class="mini">Coche les personnes qui reviennent cette année. Elles sont ajoutées au statut « Inscrit », avec leurs équipes de la dernière fois.
+        Les disponibilités et les repas sont à redemander.</p>
+      <div class="filters">
+        <button class="btn small" id="rep-tout">Tout cocher</button>
+        <button class="btn primary" id="rep-go">Ajouter à cette édition</button>
+        <span class="muted" id="rep-msg"></span>
+      </div>
+      <div class="scroll"><table class="data-table">
+        <thead><tr><th></th><th>Nom</th><th>Contact</th><th>Équipes (dernière fois)</th><th>Dernière édition</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+    </div>`;
+}
+async function reprendre() {
+  const ids = [...root.querySelectorAll("[data-rep]:checked")].map((c) => c.dataset.rep);
+  const msg = root.querySelector("#rep-msg");
+  if (!ids.length) { msg.textContent = "Coche au moins une personne."; return; }
+  const rows = anciens.filter((b) => ids.includes(b.id)).map((b) => ({
+    benevole_id: b.id, edition_id: store.editionId,
+    equipes: b.derniere.equipes || [], est_animateur: !!b.derniere.est_animateur,
+  }));
+  msg.textContent = "Ajout…";
+  const { error } = await supa.from("benevoles_editions").insert(rows);
+  if (error) { msg.textContent = "Erreur : " + error.message; return; }
+  await load();
+  view = { mode: "list", id: null };
+  go();
+  toast(`${plur(rows.length, "bénévole repris", "bénévoles repris")}.`, "ok");
 }
 
 /* ---------- nouveau ---------- */
@@ -180,6 +243,9 @@ function wireOnce() {
 function onClick(e) {
   const t = e.target;
   if (t.closest("#new-ben")) { view = { mode: "new", id: null }; return go(); }
+  if (t.closest("#reprise")) { view = { mode: "reprise", id: null }; return chargerAnciens().then(go); }
+  if (t.closest("#rep-tout")) { root.querySelectorAll("[data-rep]").forEach((c) => (c.checked = true)); return; }
+  if (t.closest("#rep-go")) return reprendre();
   if (t.closest("#cancel") || t.closest("#back")) { view = { mode: "list", id: null }; return go(); }
   if (t.closest("#b-create")) return createBen();
   if (t.closest("#save")) return saveFiche();
