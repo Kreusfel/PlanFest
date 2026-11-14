@@ -8,7 +8,7 @@ import * as swipe from "./selection-swipe.js";
 
 const STATUTS = [["souhaite", "Souhaité"], ["demande", "Demandé"], ["recu", "Reçu"], ["deja_asso", "Déjà à l'asso"]];
 const STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso: "blue" };
-const USAGES = [["animation", "Animation"], ["tombola", "Tombola"]];
+const USAGES = [["animation", "Animation"], ["bar", "Bar à jeux"], ["tombola", "Tombola"]];
 const BGG = `<p class="mini bgg-foot">Données et images : <a href="https://boardgamegeek.com" target="_blank" rel="noopener">Powered by BGG</a></p>`;
 
 let root, list = [], cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = [], loadErr = "";
@@ -126,7 +126,7 @@ function listView() {
   const eIds = [...new Set(list.map((x) => x.jeux.editeur_id).filter(Boolean))];
   const eOpts = `<option value="">Tous éditeurs</option>` + eIds.map((id) => `<option value="${id}"${filt.editeur === id ? " selected" : ""}>${esc(orgNom(id))}</option>`).join("");
   const tabs = `<div class="utabs">
-    <button data-tab="editeurs"${view.tab === "editeurs" ? ' class="on"' : ""}>Demandés &amp; reçus</button>
+    <button data-tab="editeurs"${view.tab === "editeurs" ? ' class="on"' : ""}>Sélection</button>
     <button data-tab="ludo"${view.tab === "ludo" ? ' class="on"' : ""}>Trier la ludothèque</button></div>`;
   const head = `<div class="page-head"><div><h1>Sélection Jeux</h1>
     <div class="sub">${plur(nr, "reçu", "reçus")} · ${plur(nd, "demandé", "demandés")} · ${nsa} sans animateur</div></div>
@@ -260,7 +260,11 @@ function wireOnce() {
 async function onClick(e) {
   const t = e.target;
   const tab = t.closest("[data-tab]");
-  if (tab) { view = { mode: "list", id: null, tab: tab.dataset.tab }; return go(); }
+  if (tab) {
+    view = { mode: "list", id: null, tab: tab.dataset.tab };
+    if (view.tab === "editeurs") await load();  // le tri de la ludothèque a pu changer la sélection
+    return go();
+  }
   if (t.closest("#new-jeu")) { bggResults = null; bggMsg = ""; view = { mode: "bgg", id: null }; return go(); }
   if (t.closest("#back")) { view = { mode: "list", id: null, tab: "editeurs" }; return go(); }
   if (t.closest("#to-manual")) { view = { mode: "manual", id: null }; return go(); }
@@ -307,6 +311,7 @@ async function importBgg(r) {
     bgg_id: r.bgg_id, titre: r.titre, annee: r.annee, image_url: r.image_url, miniature_url: r.miniature_url,
     joueurs_min: r.joueurs_min, joueurs_max: r.joueurs_max, duree_min: r.duree_min, age_min: r.age_min,
     categorie_id: suggestCat(r.age_min) || null,
+    ludotheque: false,  // jeu d'éditeur : n'entre pas dans le tri de la ludothèque
   }).select().single();
   if (e1) { if (msg) msg.textContent = e1.message.includes("duplicate") ? "Ce jeu est déjà au catalogue." : "Erreur : " + e1.message; return; }
   const { data: je, error: e2 } = await supa.from("jeux_editions")
@@ -339,6 +344,7 @@ async function createManual() {
     joueurs_min: numOrNull(g("joueurs_min").value), joueurs_max: numOrNull(g("joueurs_max").value),
     duree_min: numOrNull(g("duree_min").value), age_min: numOrNull(g("age_min").value),
     categorie_id: g("categorie_id").value || null, editeur_id: g("editeur_id").value || null,
+    ludotheque: false,  // jeu d'éditeur : n'entre pas dans le tri de la ludothèque
   }).select().single();
   if (e1) { msg.textContent = "Erreur : " + e1.message; return; }
   const { data: je, error: e2 } = await supa.from("jeux_editions")

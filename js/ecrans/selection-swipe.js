@@ -76,7 +76,8 @@ function draw() {
       <button class="btn" id="lu-back"${idx === 0 ? " disabled" : ""}>Annuler</button>
       <span class="muted" style="flex:1;text-align:center;align-self:center">${c.oui} oui · ${c.bar} bar · ${c.non} non</span>
     </div>
-    <div class="sub" style="text-align:center">Glisse à droite : oui · en haut : bar à jeux · à gauche : non</div>`);
+    <div class="sub" style="text-align:center">Glisse à droite : oui · en haut : bar à jeux · à gauche : non</div>
+    <p class="mini" style="text-align:center">Oui = jeu animé, Bar à jeux = en libre-service : le jeu est ajouté à la Sélection. Non = retiré de la Sélection.</p>`);
   wireCard();
   wireBtns();
 }

@@ -16,7 +16,7 @@ const ROLE_SUB = { editeur: "editeurs", partenaire: "partenaires", sponsor: "spo
 const ROLE_PLURAL = { editeur: "Éditeurs", partenaire: "Partenaires", sponsor: "Sponsors" };
 const JE_STATUT_LBL = { souhaite: "Souhaité", demande: "Demandé", recu: "Reçu", deja_asso: "Déjà à l'asso" };
 const JE_STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso: "blue" };
-const JE_USAGE_LBL = { animation: "Animation", tournoi: "Tournoi", tombola: "Tombola" };
+const JE_USAGE_LBL = { animation: "Animation", bar: "Bar à jeux", tombola: "Tombola" };
 
 const today = aujourdhui;
 
@@ -287,7 +287,7 @@ function editeurJeuxBlock(oe) {
     ${canAdd ? `<div class="add-jeu-row" style="display:none">
       <select id="add-jeu"><option value="">— jeu du catalogue —</option>${dispo.map((j) => `<option value="${j.id}">${esc(j.titre)}</option>`).join("")}</select>
       <button class="btn small primary" id="add-jeu-go">Ajouter</button></div>` : ""}
-    <p class="mini">Statuts : souhaité, demandé, reçu. Usages : animation et/ou tombola. Modifiable dans « Jeux ».</p>
+    <p class="mini">Statuts : souhaité, demandé, reçu. Usages : animation, bar à jeux, tombola. Modifiable dans « Jeux ».</p>
     <p class="msg" id="je-msg"></p></div>`;
 }
 
