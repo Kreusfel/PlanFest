@@ -95,7 +95,7 @@ export async function render(c) {
 
   c.querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => {
     setEdition(b.dataset.open);
-    location.hash = "#/plan";
+    location.hash = "#/";
   }));
 
   // Dupliquer : petit formulaire dans la ligne (nom + vrai sélecteur de date),
