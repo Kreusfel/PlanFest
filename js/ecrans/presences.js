@@ -11,7 +11,7 @@ import { presencesQueue as Q } from "../offline/idb.js";
 const ETATS = [["attendu", "Attendu", "grey"], ["present", "Présent", "ok"], ["retard", "Retard", "amber"], ["absent", "Absent", "alert"]];
 const JOURS = [["ven", "Vendredi"], ["sam", "Samedi"], ["dim", "Dimanche"]];
 
-let root, jours = ["sam", "dim"], jour = "sam", benevoles = [], etats = {}, attente = 0, retry = null;
+let root, jours = ["sam", "dim"], jour = "sam", benevoles = [], prevus = {}, etats = {}, attente = 0, retry = null;
 const cacheKey = () => "pf_presences_" + store.editionId;
 const gere = () => isAdmin() || hasPole("animateurs_benevoles");
 
@@ -30,10 +30,11 @@ export async function render(container) {
   if (!ed.error && !be.error) {
     jours = ed.data?.jours_actifs?.length ? ed.data.jours_actifs : ["sam", "dim"];
     benevoles = (be.data ?? []).filter((x) => x.benevoles).sort((a, b) => a.benevoles.nom.localeCompare(b.benevoles.nom, "fr"));
-    try { localStorage.setItem(cacheKey(), JSON.stringify({ jours, benevoles })); } catch { /* stockage plein ou bloqué */ }
+    prevus = await chargerPrevus(benevoles.map((b) => b.id));
+    try { localStorage.setItem(cacheKey(), JSON.stringify({ jours, benevoles, prevus })); } catch { /* stockage plein ou bloqué */ }
   } else {
     // Hors ligne : dernière liste connue sur cet appareil.
-    try { ({ jours, benevoles } = JSON.parse(localStorage.getItem(cacheKey())) || { jours, benevoles: [] }); } catch { benevoles = []; }
+    try { ({ jours, benevoles, prevus = {} } = JSON.parse(localStorage.getItem(cacheKey())) || { jours, benevoles: [] }); } catch { benevoles = []; prevus = {}; }
   }
   if (!jours.includes(jour)) jour = jours[0];
   wireOnce();
@@ -47,6 +48,21 @@ export async function render(container) {
 export function unmount() {
   window.removeEventListener("online", flush);
   clearInterval(retry); retry = null;
+}
+
+// Bénévoles attendus chaque jour : disponibles ce jour-là (grille de la fiche), ou
+// avec une permanence ou une partie prévue ce jour-là. { jour: [benevole_edition_id…] }
+async function chargerPrevus(ids) {
+  const res = {};
+  if (!ids.length) return res;
+  const ajoute = (j, id) => { if (id) (res[j] = res[j] || []).push(id); };
+  const [d, pm, pa] = await Promise.all([
+    supa.from("disponibilites").select("benevole_edition_id,jour").eq("disponible", true).in("benevole_edition_id", ids),
+    supa.from("permanences").select("benevole_edition_id,jour").eq("edition_id", store.editionId),
+    supa.from("parties").select("benevole_edition_id,jour").eq("edition_id", store.editionId),
+  ]);
+  [d, pm, pa].forEach((r) => (r.data ?? []).forEach((x) => ajoute(x.jour, x.benevole_edition_id)));
+  return res;
 }
 
 const page = (body) => `<div class="page-head"><div><h1>Présences</h1>
@@ -67,12 +83,20 @@ async function loadEtats() {
 function draw() {
   const jourBtns = jours.map((j) => `<button class="btn small${j === jour ? " primary" : ""}" data-jour="${j}">${esc((JOURS.find((x) => x[0] === j) || [j, j])[1])}</button>`).join("");
   const counts = {}; ETATS.forEach(([k]) => (counts[k] = 0));
-  benevoles.forEach((b) => { counts[etats[b.id] || "attendu"]++; });
-  const rows = benevoles.map((b) => {
+  const prevusJour = new Set(prevus[jour] || []);
+  benevoles.forEach((b) => { if (prevusJour.has(b.id) || etats[b.id]) counts[etats[b.id] || "attendu"]++; });
+  const ligne = (b) => {
     const cur = etats[b.id] || "attendu";
     const btns = ETATS.map(([k, lbl, cls]) => `<button class="niv ${cur === k ? "on " + cls : ""}" aria-pressed="${cur === k}" data-be="${b.id}" data-etat="${k}">${esc(lbl)}</button>`).join("");
     return `<div class="comp-row"><span class="comp-nom">${esc(b.benevoles.nom)}${b.est_animateur ? ' <span class="pill amber">anim.</span>' : ""}</span><div class="niv-grp">${btns}</div></div>`;
-  }).join("") || `<p class="muted">Aucun bénévole inscrit.</p>`;
+  };
+  // Attendus ce jour d'abord ; les autres (ou déjà pointés) restent accessibles, repliés.
+  const duJour = new Set(prevus[jour] || []);
+  const attendus = benevoles.filter((b) => duJour.has(b.id) || etats[b.id]);
+  const autres = benevoles.filter((b) => !duJour.has(b.id) && !etats[b.id]);
+  const rows = !benevoles.length ? `<p class="muted">Aucun bénévole inscrit.</p>`
+    : (attendus.map(ligne).join("") || `<p class="muted">Personne n'est prévu ce jour (ni disponibilité, ni permanence, ni partie).</p>`)
+      + (autres.length ? `<details class="pres-autres"><summary>Autres bénévoles, pas prévus ce jour (${autres.length})</summary>${autres.map(ligne).join("")}</details>` : "");
   root.innerHTML = page(`<div class="page-head" style="margin:0 0 12px"><div></div><div class="head-actions">${jourBtns}</div></div>
     <div class="card">
       <div class="kpis">${ETATS.map(([k, lbl, cls]) => `<div class="kpi ${k === "present" ? "ok" : k === "absent" ? "alert" : ""}"><div class="kpi-val">${counts[k]}</div><div class="kpi-lbl">${esc(lbl)}</div></div>`).join("")}</div>
