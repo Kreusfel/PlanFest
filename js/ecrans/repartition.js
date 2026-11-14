@@ -3,7 +3,9 @@
 // (ou non) un partenaire. Écriture via RPC attribuer_table_partenaire.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc } from "../ui/util.js";
+import { esc, toast } from "../ui/util.js";
+import { exportEtiquettes } from "../export/etiquettes.js";
+import { exportFiches } from "../export/fiches.js";
 import { isAdmin, hasPole } from "../auth.js";
 
 let root, salles = [], tables = [], partenaires = [];
@@ -69,7 +71,10 @@ function draw() {
     : `<div class="card"><p class="muted">Tous les partenaires ont le nombre de tables souhaité. 🎉${sansSouhait.length ? ` <span class="mini">(${sansSouhait.length} sans nombre renseigné)</span>` : ""}</p></div>`;
 
   root.innerHTML = `<div class="page-head"><div><h1>Répartition des tables</h1>
-      <div class="sub">Attribue les partenaires aux tables posées par la logistique</div></div></div>
+      <div class="sub">Attribue les partenaires aux tables posées par la logistique</div></div>
+      <div class="head-actions">
+        <button class="btn small" id="exp-etiquettes">Étiquettes de table (PDF)</button>
+        <button class="btn small" id="exp-fiches">Fiches d'accueil (PDF)</button></div></div>
     ${kpis}
     ${aPlacerCard}
     ${tables.length
@@ -80,6 +85,16 @@ function draw() {
 }
 
 function wire() {
+  const pdf = (id, fn) => { const b = root.querySelector(id); if (b) b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const { data } = await supa.from("editions").select("nom").eq("id", store.editionId).single();
+      await fn(store.editionId, data?.nom || "");
+    } catch (e) { toast("Erreur export : " + (e.message || e)); }
+    b.disabled = false;
+  }; };
+  pdf("#exp-etiquettes", exportEtiquettes);
+  pdf("#exp-fiches", exportFiches);
   root.querySelectorAll("[data-tbl]").forEach((sel) => (sel.onchange = () => assign(sel.dataset.tbl, sel.value || null)));
 }
 

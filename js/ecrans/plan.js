@@ -5,6 +5,7 @@ import { isAdmin, hasPole } from "../auth.js";
 import { esc, toast } from "../ui/util.js";
 import { plan, loadPlan, curSalle, salleElements, maxNumero, freeSpot } from "../plan/model.js";
 import { exportPlanPdf, exportPlanPng } from "../export/plan-pdf.js";
+import { exportMontage } from "../export/montage.js";
 import { CELL, M, BLOCS, renderPlan } from "../plan/render.js";
 import { markUpsert, markDelete, onStatus, onReload, flushNow } from "../plan/autosave.js";
 import { initHistory, recordHistory, undo, redo, canUndo, canRedo } from "../plan/history.js";
@@ -80,6 +81,7 @@ function buildShell() {
           <button class="btn small" id="exp-pdf">PDF</button>
           <button class="btn small" id="exp-png">PNG</button>
         </span>
+        <button class="btn small" id="exp-montage" title="Par salle : tables, chaises, prises électriques">Liste de montage (PDF)</button>
       </div>
     </div>
     <nav class="tabs salles" id="tabs"></nav>
@@ -139,6 +141,14 @@ function buildShell() {
   const expMode = () => document.getElementById("exp-mode")?.value || "numeros";
   document.getElementById("exp-pdf").onclick = async (e) => {
     e.target.disabled = true; try { await exportPlanPdf(store.editionId, plan.salles, salleElements, expMode()); } catch (_) { /* ignore */ } e.target.disabled = false;
+  };
+  document.getElementById("exp-montage").onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      const { data } = await supa.from("editions").select("nom").eq("id", store.editionId).single();
+      await exportMontage(store.editionId, data?.nom || "");
+    } catch (err) { toast("Erreur export : " + (err.message || err)); }
+    e.target.disabled = false;
   };
   document.getElementById("exp-png").onclick = async (e) => {
     const s = curSalle(); if (!s) return;

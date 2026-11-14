@@ -4,9 +4,6 @@ import { supa } from "../supabase.js";
 import { session, isAdmin, sendInvitation } from "../auth.js";
 import { store } from "../store.js";
 import { esc, plur, aujourdhui, telecharger, toast } from "../ui/util.js";
-import { exportMontage } from "../export/montage.js";
-import { exportEtiquettes } from "../export/etiquettes.js";
-import { exportFiches } from "../export/fiches.js";
 
 let root, poles = [], members = [], invitations = [], versions = [], edNom = "";
 
@@ -141,9 +138,7 @@ function cardDonnees() {
     <p class="mini">L'édition courante est celle ouverte dans « Plan des salles ».</p>
     <h3>Exporter</h3>
     <button class="btn" id="exp-go">Exporter le plan (JSON)</button>
-    <button class="btn" id="exp-montage">Liste de montage (PDF)</button>
-    <button class="btn" id="exp-etiquettes">Étiquettes de table (PDF)</button>
-    <button class="btn" id="exp-fiches">Fiches d'accueil (PDF)</button>
+    <p class="mini">Liste de montage : écran Plan des salles. Étiquettes et fiches d'accueil : écran Répartition tables.</p>
     <hr>
     <h3>Importer depuis l'ancienne maquette</h3>
     <p class="mini">Reprend les salles et le plan (tables + repères) d'un export PlanFest localStorage.
@@ -171,14 +166,11 @@ function wire() {
 }
 
 async function onClick(e) {
-  const b = e.target.closest("[data-act],[data-restore],#inv-create,#exp-go,#imp-go,#exp-montage,#exp-etiquettes,#exp-fiches,#fig-now");
+  const b = e.target.closest("[data-act],[data-restore],#inv-create,#exp-go,#imp-go,#fig-now");
   if (!b) return;
   if (b.id === "inv-create") return createInvitation();
   if (b.id === "exp-go") return exportPlan();
   if (b.id === "imp-go") return importPlan();
-  if (b.id === "exp-montage") return pdfExport(exportMontage);
-  if (b.id === "exp-etiquettes") return pdfExport(exportEtiquettes);
-  if (b.id === "exp-fiches") return pdfExport(exportFiches);
   if (b.id === "fig-now") return figer();
   if (b.dataset.restore) return restaurer(b.dataset.restore);
   const act = b.dataset.act, id = b.dataset.id;
@@ -189,11 +181,6 @@ async function onClick(e) {
   else if (act === "inv-send") await envoyer(invitations.find((i) => i.id === id)?.email);
 }
 
-async function pdfExport(fn) {
-  if (!store.editionId) { toast("Aucune édition courante (ouvre-en une dans « Plan des salles »)."); return; }
-  try { await fn(store.editionId, edNom); }
-  catch (e) { toast("Erreur export : " + (e.message || e)); }
-}
 async function figer() {
   const msg = document.getElementById("v-msg");
   const nom = prompt("Nom de la version ?", "Plan " + aujourdhui());
