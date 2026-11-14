@@ -1,7 +1,7 @@
 // Écran Éditions : liste, ouverture, création, duplication, clôture.
 import { supa } from "../supabase.js";
 import { isAdmin } from "../auth.js";
-import { setEdition } from "../store.js";
+import { store, setEdition } from "../store.js";
 import { esc } from "../ui/util.js";
 import { qrSVG } from "../export/qr.js";
 
@@ -77,11 +77,12 @@ export async function render(c) {
         ${isAdmin() ? `<button class="btn ghost small" data-dup="${e.id}">Dupliquer</button>` : ""}
         ${isAdmin() ? `<button class="btn ghost small" data-pub="${e.id}" data-v="${e.programme_publie ? "0" : "1"}">${e.programme_publie ? "Dépublier" : "Publier"}</button>` : ""}
         ${isAdmin() && e.etat !== "cloturee" ? `<button class="btn ghost small" data-close="${e.id}">Clôturer</button>` : ""}
+        ${isAdmin() ? `<button class="btn danger small" data-suppr="${e.id}">Supprimer</button>` : ""}
       </div>
     </div>`).join("") || `<p class="muted">Aucune édition pour l'instant.</p>`;
 
   c.innerHTML = `<div class="page-head"><div><h1>Éditions</h1>
-    <div class="sub">Crée, duplique ou clôture une édition du festival.</div></div></div>
+    <div class="sub">Crée, duplique, clôture ou supprime une édition du festival.</div></div></div>
   <div class="card">
     <div class="list">${rows}</div>
     ${isAdmin() ? `
@@ -176,6 +177,21 @@ export async function render(c) {
     if (r1.error || r2.error) { msg.textContent = "Erreur : " + (r1.error || r2.error).message; return; }
     msg.textContent = "Réglages enregistrés.";
     reload();
+  }));
+
+  // Supprimer une édition : tout ce qui lui appartient part avec (plan, parties, permanences,
+  // inscriptions des bénévoles et des organismes, entrées, buvette, subventions…). Les fiches
+  // permanentes restent : organismes, jeux, personnes bénévoles, carnet de contacts.
+  c.querySelectorAll("[data-suppr]").forEach((b) => (b.onclick = async () => {
+    const ed = (data ?? []).find((x) => x.id === b.dataset.suppr); if (!ed) return;
+    const saisi = prompt(`Supprimer définitivement « ${ed.nom} » ?\n\nTout ce qui appartient à cette édition est effacé : plan, parties, permanences, bénévoles et organismes inscrits, entrées, buvette, subventions, bilan… Irréversible.\nLes organismes, les jeux, les personnes et le carnet de contacts sont conservés.\n\nPour confirmer, tape le nom de l'édition :`);
+    if (saisi == null) return;
+    if (saisi.trim() !== ed.nom.trim()) { msg.textContent = "Nom différent : rien n'a été supprimé."; return; }
+    msg.textContent = "Suppression…";
+    const { data: sup, error } = await supa.from("editions").delete().eq("id", ed.id).select("id");
+    if (error || !sup?.length) { msg.textContent = "Suppression impossible" + (error ? " : " + error.message : " (droits insuffisants)."); return; }
+    if (store.editionId === ed.id) setEdition(null);
+    location.reload();  // la barre latérale (sélecteur d'édition) doit oublier l'édition supprimée
   }));
 
   c.querySelectorAll("[data-savepub]").forEach((b) => (b.onclick = async () => {
