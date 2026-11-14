@@ -5,10 +5,11 @@
 // Sous-adresses : #/terrain/moi · #/terrain/programme · #/terrain/plan[/<id élément>]
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc, aujourdhui, refocus } from "../ui/util.js";
+import { esc, aujourdhui, refocus, toast } from "../ui/util.js";
 import { salleSVG } from "../plan/svg-lecture.js";
 
 const JOUR_LBL = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
+const ETATS_TABLE = [["a_installer", "À installer", "neu"], ["installee", "Installée", "warn"], ["verifiee", "Vérifiée", "ok"]];
 const ONGLETS = [["moi", "Mon planning"], ["programme", "Programme"], ["plan", "Plan"]];
 
 let root, data = null, majLe = null, horsLigne = false;
@@ -211,8 +212,24 @@ function vuePlan() {
   const recherche = `<form class="t-outils" id="t-table">
     <input id="t-num" inputmode="numeric" placeholder="Table n°" aria-label="Numéro de table">
     <button class="btn" type="submit">Trouver</button></form>`;
-  return `${recherche}${tabs}<div class="card t-plan">${salleSVG(salle, els, { surligner: surligne, touchable: true })}</div>
+  return `${recherche}${tabs}${montage(els)}<div class="card t-plan">${salleSVG(salle, els, { surligner: surligne, touchable: true })}</div>
     <p class="mini">Touche une table pour voir ce qui s'y passe. Pince pour zoomer.</p>${detailElement()}`;
+}
+
+// Montage (équipe Montage / Logistique, responsables, admins) : avancement de la salle
+// et tables restant à vérifier, à toucher pour les ouvrir.
+function montage(els) {
+  if (!data.peut_installer) return "";
+  const tables = els.filter((e) => e.kind === "table")
+    .sort((a, b) => (parseInt(a.numero, 10) || 0) - (parseInt(b.numero, 10) || 0));
+  if (!tables.length) return "";
+  const n = (k) => tables.filter((t) => (t.etat_terrain || "a_installer") === k).length;
+  const reste = tables.filter((t) => t.etat_terrain !== "verifiee");
+  return `<div class="card"><div class="ihead"><h3>Montage de la salle</h3>
+      <span class="tag ${reste.length ? "warn" : "ok"}">${n("verifiee")}/${tables.length} vérifiées</span></div>
+    <p class="mini">${n("a_installer")} à installer · ${n("installee")} installée(s), à vérifier.</p>
+    ${reste.length ? `<div class="salle-tabs">${reste.map((t) => `<button class="pill-btn${t.id === surligne ? " on" : ""}" data-el="${esc(t.id)}">n°${esc(t.numero ?? "?")}${t.etat_terrain === "installee" ? " ✓" : ""}</button>`).join("")}</div>` : `<p class="muted">Toutes les tables de la salle sont vérifiées.</p>`}
+  </div>`;
 }
 
 // Panneau sous le plan : ce qui se passe sur l'élément surligné, le jour affiché.
@@ -231,13 +248,17 @@ function detailElement() {
   return `<div class="card t-detail"><div class="ihead"><h3>${esc(titre)}</h3>
       <button class="btn small ghost" data-t="fermer" aria-label="Fermer le détail">×</button></div>
     ${type ? `<p class="muted">${esc(type)}</p>` : ""}
+    ${e.kind === "table" && data.peut_installer ? `<div class="t-etat" role="group" aria-label="État de la table">${ETATS_TABLE.map(([k, lbl, cls]) => {
+      const on = (e.etat_terrain || "a_installer") === k;
+      return `<button class="niv${on ? " on " + cls : ""}" aria-pressed="${on}" data-etat="${k}">${esc(lbl)}</button>`;
+    }).join("")}</div>` : ""}
     ${lignes.length ? `<ul class="t-ul">${lignes.join("")}</ul>` : `<p class="muted">Rien de programmé ce ${esc((JOUR_LBL[jour] || jour).toLowerCase())}.</p>`}</div>`;
 }
 
 /* ---------- interactions ---------- */
 function onClick(ev) {
   const t = ev.target;
-  const b = t.closest("[data-onglet],[data-jour],[data-salle],[data-goto],[data-t],[data-el]");
+  const b = t.closest("[data-onglet],[data-jour],[data-salle],[data-goto],[data-t],[data-el],[data-etat]");
   if (!b) return;
   if (b.dataset.onglet) { onglet = b.dataset.onglet; if (onglet !== "plan") surligne = null; window.scrollTo(0, 0); return draw(); }
   if (b.dataset.jour) { jour = b.dataset.jour; return draw(); }
@@ -245,6 +266,7 @@ function onClick(ev) {
   if (b.dataset.goto) { allerA(b.dataset.goto); window.scrollTo(0, 0); return draw(); }
   if (b.dataset.el) { surligne = b.dataset.el; draw(); root.querySelector(".t-detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
   if (b.dataset.t === "fermer") { surligne = null; return draw(); }
+  if (b.dataset.etat) return majEtat(surligne, b.dataset.etat);
   if (b.dataset.t === "refresh") { charger(); }
 }
 
@@ -263,4 +285,15 @@ function onSubmit(ev) {
   const e = (data.elements || []).find((x) => x.kind === "table" && String(x.numero ?? "").toLowerCase() === n);
   if (!e) { const inp = ev.target.querySelector("#t-num"); if (inp) { inp.value = ""; inp.placeholder = `Pas de table n°${n}`; } return; }
   allerA(e.id); draw();
+}
+
+// Marque la table (installée / vérifiée). Demande le réseau : pas de file hors ligne,
+// l'état doit être vu tout de suite par la logistique.
+async function majEtat(elementId, etat) {
+  const e = (data.elements || []).find((x) => x.id === elementId); if (!e) return;
+  const { error } = await supa.rpc("maj_etat_terrain", { p_element: elementId, p_etat: etat });
+  if (error) { toast(/fetch|network|Failed|Load failed/i.test(error.message) ? "Pas de réseau : réessaie dans un instant." : "Erreur : " + error.message); return; }
+  e.etat_terrain = etat;
+  try { localStorage.setItem(cacheKey(), JSON.stringify({ at: majLe, data })); } catch { /* stockage plein */ }
+  draw();
 }
