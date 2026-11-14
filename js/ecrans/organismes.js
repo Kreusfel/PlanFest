@@ -22,7 +22,7 @@ const today = aujourdhui;
 
 let root, list = [], regimes = {}, jeuxEd = {}, catalogue = [], placedTables = {}, loadErr = "";
 let scope = null, newPreset = null;
-let filt = { q: "", statut: "", relance: false };
+let filt = { q: "", statut: "", relance: false, dossier: false };
 let view = { mode: "hub", id: null };
 
 const roleLabel = (k) => (ROLES.find((r) => r[0] === k) || [k, k])[1];
@@ -110,7 +110,16 @@ function orgTr(oe) {
     <td><span class="tag ${STATUT_TAG[oe.statut] || "neu"}">${esc(statutLabel(oe.statut))}</span></td>
     <td class="muted">${oe.dernier_contact ? esc(oe.dernier_contact) : "jamais"}</td>
     <td class="muted">${esc(extra)}</td>
+    ${scope === "partenaire" && view.mode === "list" ? `<td>${dossierTags(oe)}</td>` : ""}
   </tr>`;
+}
+
+// Convention et assurance d'un partenaire (cases de sa fiche).
+const dossierComplet = (oe) => oe.convention_recue && oe.assurance_recue;
+function dossierTags(oe) {
+  if (dossierComplet(oe)) return `<span class="tag ok">complet</span>`;
+  return [oe.convention_recue ? "" : "convention", oe.assurance_recue ? "" : "assurance"].filter(Boolean)
+    .map((x) => `<span class="tag ${oe.statut === "confirme" ? "bad" : "neu"}">${x}</span>`).join(" ");
 }
 
 /* ---------- accueil ---------- */
@@ -149,12 +158,13 @@ function filtered() {
     if (q && !(`${o.nom} ${o.contact_nom || ""}`.toLowerCase().includes(q))) return false;
     if (filt.statut && oe.statut !== filt.statut) return false;
     if (filt.relance && !["invite", "relance"].includes(oe.statut)) return false;
+    if (filt.dossier && scope === "partenaire" && (oe.statut !== "confirme" || dossierComplet(oe))) return false;
     return true;
   }).sort((a, b) => a.organismes.nom.localeCompare(b.organismes.nom, "fr"));
 }
 function listView() {
   const rows = filtered().map(orgTr).join("")
-    || `<tr><td colspan="6" class="muted">${loadErr ? "Erreur : " + esc(loadErr) : "Aucun organisme pour ces filtres."}</td></tr>`;
+    || `<tr><td colspan="7" class="muted">${loadErr ? "Erreur : " + esc(loadErr) : "Aucun organisme pour ces filtres."}</td></tr>`;
   const statutOpts = `<option value="">Tous statuts</option>` + STATUTS.map((s) => `<option value="${s[0]}"${filt.statut === s[0] ? " selected" : ""}>${s[1]}</option>`).join("");
   const scoped = list.filter((x) => (x.roles || []).includes(scope));
   const conf = scoped.filter((x) => x.statut === "confirme").length, rel = scoped.filter((x) => ["invite", "relance"].includes(x.statut)).length;
@@ -167,9 +177,10 @@ function listView() {
         <input id="f-q" class="grow" placeholder="Rechercher…" value="${esc(filt.q)}">
         <select id="f-statut">${statutOpts}</select>
         <button class="btn small${filt.relance ? " primary" : ""}" id="f-relance">À relancer</button>
+        ${scope === "partenaire" ? `<button class="btn small${filt.dossier ? " primary" : ""}" id="f-dossier" title="Confirmés sans convention ou sans assurance">Dossier incomplet (${list.filter((x) => (x.roles || []).includes("partenaire") && x.statut === "confirme" && !dossierComplet(x)).length})</button>` : ""}
       </div>
       <div class="scroll"><table class="data-table">
-        <thead><tr><th>Organisme</th><th>Rôle</th><th>Contact</th><th>Statut</th><th>Dernier contact</th><th>Tables / jeux</th></tr></thead>
+        <thead><tr><th>Organisme</th><th>Rôle</th><th>Contact</th><th>Statut</th><th>Dernier contact</th><th>Tables / jeux</th>${scope === "partenaire" ? "<th>Dossier</th>" : ""}</tr></thead>
         <tbody>${rows}</tbody></table></div>
     </div>`;
 }
@@ -315,6 +326,7 @@ function onClick(e) {
   if (t.closest("#add-jeu-toggle")) { const row = root.querySelector(".add-jeu-row"); if (row) row.style.display = "flex"; return; }
   if (t.closest("#add-jeu-go")) return addJeu();
   if (t.closest("#f-relance")) { filt.relance = !filt.relance; return go(); }
+  if (t.closest("#f-dossier")) { filt.dossier = !filt.dossier; return go(); }
   const openRow = t.closest("[data-open]");
   if (openRow) { view = { mode: "fiche", id: openRow.dataset.open }; return go(); }
 }

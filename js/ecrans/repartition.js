@@ -6,6 +6,7 @@ import { store } from "../store.js";
 import { esc, toast } from "../ui/util.js";
 import { exportEtiquettes } from "../export/etiquettes.js";
 import { exportFiches } from "../export/fiches.js";
+import { exportBadges } from "../export/badges.js";
 import { isAdmin, hasPole } from "../auth.js";
 
 let root, salles = [], tables = [], partenaires = [];
@@ -74,7 +75,8 @@ function draw() {
       <div class="sub">Attribue les partenaires aux tables posées par la logistique</div></div>
       <div class="head-actions">
         <button class="btn small" id="exp-etiquettes">Étiquettes de table (PDF)</button>
-        <button class="btn small" id="exp-fiches">Fiches d'accueil (PDF)</button></div></div>
+        <button class="btn small" id="exp-fiches">Fiches d'accueil (PDF)</button>
+        <button class="btn small" id="exp-badges">Badges exposants (PDF)</button></div></div>
     ${kpis}
     ${aPlacerCard}
     ${tables.length
@@ -95,6 +97,7 @@ function wire() {
   }; };
   pdf("#exp-etiquettes", exportEtiquettes);
   pdf("#exp-fiches", exportFiches);
+  pdf("#exp-badges", exportBadges);
   root.querySelectorAll("[data-tbl]").forEach((sel) => (sel.onchange = () => assign(sel.dataset.tbl, sel.value || null)));
 }
 
