@@ -44,7 +44,8 @@ function card(ins, type) {
   return `<div class="row">
     <div class="row-main"><b>${esc(pl.nom || "Sans nom")}</b><span class="muted">${esc((ins.recu_le || "").slice(0, 16).replace("T", " "))}</span>
       <div>${lignes}</div></div>
-    <div class="actions"><button class="btn small primary" data-integ="${type}:${ins.id}">Intégrer</button></div>
+    <div class="actions"><button class="btn small danger" data-rejet="${type}:${ins.id}">Rejeter</button>
+      <button class="btn small primary" data-integ="${type}:${ins.id}">Intégrer</button></div>
   </div>`;
 }
 
@@ -66,6 +67,8 @@ function wireOnce() {
     if (copy) { try { await navigator.clipboard.writeText(copy.dataset.copy); const m = root.querySelector("#i-msg"); if (m) m.textContent = "Lien copié."; } catch { /* ignore */ } return; }
     const integ = e.target.closest("[data-integ]");
     if (integ) return integrer(integ.dataset.integ);
+    const rejet = e.target.closest("[data-rejet]");
+    if (rejet) return rejeter(rejet.dataset.rejet);
   });
 }
 
@@ -77,4 +80,18 @@ async function integrer(key) {
   if (error) { if (msg) msg.textContent = "Erreur : " + error.message; return; }
   await load(); draw();
   const m = root.querySelector("#i-msg"); if (m) m.textContent = type === "partenaire" ? "Partenaire créé (statut à contacter)." : "Bénévole créé.";
+}
+
+// Rejeter = supprimer le formulaire (doublon, spam, personne qui se désiste) :
+// rien n'est créé, et les données personnelles ne restent pas stockées.
+async function rejeter(key) {
+  const [type, id] = key.split(":");
+  const ins = (type === "partenaire" ? parts : benv).find((x) => x.id === id);
+  if (!confirm(`Rejeter l'inscription de « ${ins?.payload?.nom || "sans nom"} » ? Le formulaire est supprimé définitivement.`)) return;
+  const table = type === "partenaire" ? "inscriptions_partenaires" : "inscriptions_benevoles";
+  const { data, error } = await supa.from(table).delete().eq("id", id).select("id");
+  const msg = root.querySelector("#i-msg");
+  if (error || !data?.length) { if (msg) msg.textContent = "Suppression impossible" + (error ? " : " + error.message : " (droits insuffisants)."); return; }
+  await load(); draw();
+  const m = root.querySelector("#i-msg"); if (m) m.textContent = "Inscription rejetée.";
 }
