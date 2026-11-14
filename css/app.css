@@ -453,3 +453,4 @@ input[type=color]{padding:3px;height:44px}
 }
 .pres-autres{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px}
 .pres-autres>summary{cursor:pointer;font-weight:600;color:var(--muted);font-size:13px;margin-bottom:6px}
+.kpi-n1{font-size:11px;color:var(--muted);margin-top:2px}

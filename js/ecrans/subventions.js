@@ -55,19 +55,21 @@ function listView() {
       <td><strong>${esc(s.financeur)}</strong></td>
       <td><span class="tag ${TAG[s.statut] || "neu"}">${esc(stLabel(s.statut))}</span></td>
       <td class="muted">${ech}</td>
+      <td style="text-align:right">${s.statut === "accorde" ? `<b>${eur(s.montant_accorde)}</b>` : `<span class="muted">${s.montant_demande != null ? "demandé " + eur(s.montant_demande) : "—"}</span>`}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="3" class="muted">${loadErr ? "Erreur : " + esc(loadErr) : "Aucun dossier."}</td></tr>`;
+  }).join("") || `<tr><td colspan="4" class="muted">${loadErr ? "Erreur : " + esc(loadErr) : "Aucun dossier."}</td></tr>`;
 
   const sOpts = `<option value="">Tous statuts</option>` + STATUTS.map((s) => `<option value="${s[0]}"${filt.statut === s[0] ? " selected" : ""}>${s[1]}</option>`).join("");
   const soon = list.filter((s) => { const d = joursAvant(s.echeance); return d !== null && d >= 0 && d <= 30 && !["accorde", "refuse"].includes(s.statut); }).length;
 
+  const totAcc = list.filter((s) => s.statut === "accorde").reduce((t, s) => t + (+s.montant_accorde || 0), 0);
   return `<div class="page-head"><div><h1>Subventions</h1>
-    <div class="sub">${plur(list.length, "dossier", "dossiers")}${soon ? ` · ${plur(soon, "échéance", "échéances")} sous 30 j` : ""}</div></div>
+    <div class="sub">${plur(list.length, "dossier", "dossiers")}${totAcc ? ` · ${eur(totAcc)} accordés` : ""}${soon ? ` · ${plur(soon, "échéance", "échéances")} sous 30 j` : ""}</div></div>
     <div class="head-actions">${canWrite() ? `<button class="btn primary" id="new-sub">+ Nouveau dossier</button>` : ""}</div></div>
     <div class="card">
       <div class="filters"><select id="f-statut">${sOpts}</select></div>
       <div class="scroll"><table class="data-table">
-        <thead><tr><th>Financeur</th><th>Statut</th><th>Échéance</th></tr></thead>
+        <thead><tr><th>Financeur</th><th>Statut</th><th>Échéance</th><th style="text-align:right">Montant</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
     </div>`;
 }
@@ -79,6 +81,10 @@ function form(s, ro) {
     <div class="row2">
       ${field("Échéance", `<input type="date" data-f="echeance" value="${esc(s.echeance || "")}"${ro}>`)}
       ${field("Statut", `<select data-f="statut"${ro}>${STATUTS.map((o) => `<option value="${o[0]}"${o[0] === s.statut ? " selected" : ""}>${o[1]}</option>`).join("")}</select>`)}
+    </div>
+    <div class="row2">
+      ${field("Montant demandé (€)", `<input type="number" min="0" step="0.01" data-f="montant_demande" value="${s.montant_demande ?? ""}"${ro}>`)}
+      ${field("Montant accordé (€)", `<input type="number" min="0" step="0.01" data-f="montant_accorde" value="${s.montant_accorde ?? ""}"${ro}>`)}
     </div>
     ${field("Lien vers les pièces", `<input data-f="lien_pieces" value="${esc(s.lien_pieces || "")}" placeholder="https://…"${ro}>`)}
     ${field("Notes", `<textarea data-f="notes"${ro}>${esc(s.notes || "")}</textarea>`)}`;
@@ -120,10 +126,13 @@ function onChange(e) {
   const t = e.target;
   if (t.id === "f-statut" && t.closest(".filters")) { filt.statut = t.value; return go(); }
 }
+const montant = (v) => { const n = parseFloat(String(v).replace(",", ".")); return isNaN(n) ? null : n; };
+const eur = (n) => n == null ? "—" : Number(n).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 function readForm() {
   const g = (f) => root.querySelector(`[data-f="${f}"]`);
   return { financeur: (g("financeur").value || "").trim(), echeance: g("echeance").value || null,
-    statut: g("statut").value, lien_pieces: g("lien_pieces").value || null, notes: g("notes").value || null };
+    statut: g("statut").value, lien_pieces: g("lien_pieces").value || null, notes: g("notes").value || null,
+    montant_demande: montant(g("montant_demande").value), montant_accorde: montant(g("montant_accorde").value) };
 }
 async function create() {
   const msg = root.querySelector("#s-msg"), v = readForm();
