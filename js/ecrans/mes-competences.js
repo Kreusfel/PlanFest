@@ -21,12 +21,13 @@ export async function render(container) {
   if (!m.data) { root.innerHTML = page(`<div class="card"><p class="muted">Ton compte n'est pas relié à une fiche bénévole. Demande à un responsable de te créer et t'inviter.</p></div>`); return; }
   me = m.data;
   const [je, cp, be, c] = await Promise.all([
-    supa.from("jeux_editions").select("jeux(id,titre,annee,image_url,miniature_url,joueurs_min,joueurs_max,duree_min,age_min,categorie_id)").eq("edition_id", store.editionId),
+    supa.from("jeux_editions").select("usages, jeux(id,titre,annee,image_url,miniature_url,joueurs_min,joueurs_max,duree_min,age_min,categorie_id)").eq("edition_id", store.editionId),
     supa.from("competences").select("benevole_id,jeu_id,categorie_id,niveau"),
     supa.from("benevoles_editions").select("benevole_id").eq("edition_id", store.editionId),
     supa.from("categories_jeux").select("id,nom"),
   ]);
-  games = (je.data ?? []).map((x) => x.jeux).filter(Boolean).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+  // Seulement les jeux à animer (pas la tombola) : on ne cherche un animateur que pour eux.
+  games = (je.data ?? []).filter((x) => (x.usages || ["animation"]).includes("animation")).map((x) => x.jeux).filter(Boolean).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
   comps = cp.data ?? [];
   beneIds = new Set((be.data ?? []).map((x) => x.benevole_id));
   cats = c.data ?? [];
@@ -46,7 +47,7 @@ function hasAnimator(jeu) {
 }
 
 function draw() {
-  if (!games.length) { root.innerHTML = page(`<div class="card"><p class="muted">Aucun jeu dans cette édition pour l'instant.</p></div>`); return; }
+  if (!games.length) { root.innerHTML = page(`<div class="card"><p class="muted">Aucun jeu à animer dans cette édition pour l'instant.</p></div>`); return; }
   if (idx >= games.length) {
     root.innerHTML = page(`<div class="card" style="text-align:center;padding:30px">
       <h2 style="font-size:20px">Terminé ! 🎉</h2>
