@@ -13,7 +13,7 @@ const POLE_TITRE = {
 const POLE_LIEN = {
   partenaires: "#/organismes", jeux_editeurs: "#/jeux", sponsors: "#/subventions",
   animateurs_benevoles: "#/benevoles", buvette_catering: "#/repas",
-  logistique_securite: "#/plan", communication: "#/organismes", intergenerationnelle: "#/benevoles",
+  logistique_securite: "#/plan", communication: "#/communication", intergenerationnelle: "#/intergeneration",
 };
 const LABELS = {
   confirmes: "Confirmés", a_relancer: "À relancer", tables_non_attribuees: "Tables à attribuer",
@@ -21,7 +21,8 @@ const LABELS = {
   dossiers_attente: "Dossiers en attente", echeances_30j: "Échéances < 30 j",
   tables_non_verifiees: "Tables non vérifiées", benevoles: "Bénévoles", animateurs: "Animateurs",
   alertes: "Alertes parties", confirmes_sans_logo: "Confirmés sans logo", programme_publie: "Programme publié",
-  benevoles_vendredi: "Dispo vendredi", sam: "Repas samedi", dim: "Repas dimanche",
+  ecoles_confirmees: "Écoles confirmées", etablissements_confirmes: "Établissements confirmés",
+  personnes_attendues: "Personnes attendues", sam: "Repas samedi", dim: "Repas dimanche",
 };
 // Indicateurs où un nombre > 0 signale une action à mener (teinte d'alerte)
 const ALERTE_SI_POSITIF = new Set(["a_relancer", "tables_non_attribuees", "editeurs_sans_reponse",

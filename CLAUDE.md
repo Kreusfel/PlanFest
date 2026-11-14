@@ -40,7 +40,7 @@ projet : les respecter dans chaque session.
 ## Base de données
 
 - Migrations numérotées `NNN_nom.sql`, **jamais modifier une migration déjà appliquée** :
-  en créer une nouvelle. Prochaine : `035_…`.
+  en créer une nouvelle. Prochaine : `036_…`.
 - `create or replace function` ne peut pas changer le type de retour : `drop function`
   d'abord. Pour une policy : `drop policy if exists` puis `create policy`.
 - Avant de redéfinir une fonction ou une policy, chercher sa **dernière** définition
