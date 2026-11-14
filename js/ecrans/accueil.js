@@ -6,14 +6,14 @@
 import { supa } from "../supabase.js";
 import { session } from "../auth.js";
 import { store } from "../store.js";
-import { esc, toast } from "../ui/util.js";
+import { esc, toast, aujourdhui } from "../ui/util.js";
 import { qAdd, qAll, qDel } from "../offline/idb.js";
 
 const TRANCHES = [["3+", "3 ans +"], ["6+", "6 ans +"], ["8+", "8 ans +"], ["13+", "13 ans +"], ["adulte", "Adulte"]];
 const JOURS = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
 let root, jours = ["sam", "dim"], jour = "sam", tab = "entrees";
 let ville = "Fécamp", cp = "76400", basket = {}, counts = {}, synced = true, lastGroup = [];
-let parties = [], insc = [], retry = null;
+let parties = [], insc = [], retry = null, dateSamedi = null, voirTerminees = false;
 const onOnline = () => { if (store.editionId) refresh(); };
 const onOffline = () => { if (root?.isConnected) draw(); };
 const countsKey = () => `pf_accueil_${store.editionId}_${jour}`;
@@ -25,8 +25,11 @@ export async function render(container) {
       <div class="card"><p><a class="btn primary" href="#/editions">Choisir une édition</a></p></div>`;
     return;
   }
-  const ed = await supa.from("editions").select("jours_actifs").eq("id", store.editionId).single();
+  const ed = await supa.from("editions").select("jours_actifs,date_samedi").eq("id", store.editionId).single();
   jours = ed.data?.jours_actifs?.length ? ed.data.jours_actifs : ["sam", "dim"];
+  dateSamedi = ed.data?.date_samedi || null;
+  const j = jourDuFestival();
+  if (j && jours.includes(j)) jour = j;  // pendant le festival : s'ouvre sur le jour en cours
   if (!jours.includes(jour)) jour = jours[0];
   unmount();
   window.addEventListener("online", onOnline);
@@ -118,38 +121,48 @@ function entreesTab() {
 }
 
 /* ---------- Inscriptions aux parties ---------- */
+// Code du jour si on est pendant le festival (vendredi = veille du samedi), sinon null.
+function jourDuFestival() {
+  if (!dateSamedi) return null;
+  const decale = (n) => { const d = new Date(dateSamedi + "T12:00:00"); d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  return { [decale(-1)]: "ven", [decale(0)]: "sam", [decale(1)]: "dim" }[aujourdhui()] || null;
+}
+const enMinutes = (t) => { const [h, m] = String(t || "0:0").split(":").map(Number); return h * 60 + (m || 0); };
+
 function inscTab() {
   const nbPar = new Map();
   insc.forEach((i) => nbPar.set(i.partie_id, (nbPar.get(i.partie_id) || 0) + i.nb));
-  const jOrder = { ven: 0, sam: 1, dim: 2 };
-  const sorted = [...parties].sort((a, b) => (jOrder[a.jour] - jOrder[b.jour]) || (a.debut || "").localeCompare(b.debut || ""));
-  const byJour = {};
-  sorted.forEach((p) => (byJour[p.jour] = byJour[p.jour] || []).push(p));
-  const body = Object.keys(byJour).sort((a, b) => jOrder[a] - jOrder[b]).map((j) => {
-    const rows = byJour[j].map((p) => {
-      const jeu = p.jeux_editions?.jeux?.titre || "Partie";
-      const t = p.elements?.numero ? `Table n°${p.elements.numero}` : "";
-      const pris = nbPar.get(p.id) || 0;
-      const reste = p.places != null ? p.places - pris : null;
-      const full = reste != null && reste <= 0;
-      const mine = insc.filter((i) => i.partie_id === p.id);
-      return `<div class="card insc-card">
-        <div class="ihead"><h3>${esc((p.debut || "").slice(0, 5))}–${esc((p.fin || "").slice(0, 5))} · ${esc(jeu)}</h3>
-          <span class="tag ${full ? "bad" : "ok"}">${p.places != null ? `${pris}/${p.places}` : `${pris}`} inscrit${pris > 1 ? "s" : ""}${full ? " · complet" : ""}</span></div>
-        <div class="muted" style="margin:-4px 0 8px">${esc(t)}</div>
-        <div class="filters" style="align-items:flex-end">
-          <label>Nom (optionnel)<input data-inom="${p.id}" placeholder="Famille, prénom…"${full ? " disabled" : ""}></label>
-          <label>Nombre<input type="number" min="1" value="1"${reste != null ? ` max="${reste}"` : ""} data-inb="${p.id}" style="width:80px"${full ? " disabled" : ""}></label>
-          <button class="btn primary" data-iadd="${p.id}"${full ? " disabled" : ""}>${full ? "Complet" : "Inscrire"}</button>
-          ${reste != null && !full ? `<span class="muted">${reste} place${reste > 1 ? "s" : ""} restante${reste > 1 ? "s" : ""}</span>` : ""}
-        </div>
-        ${mine.length ? `<details class="insc-list"><summary>${mine.length} inscription${mine.length > 1 ? "s" : ""}</summary>
-          ${mine.map((i) => `<div class="insc-row"><span>${esc(i.nom || "—")} · ${i.nb} pers.</span><button class="btn small danger" data-idel="${i.id}" aria-label="Supprimer l'inscription">×</button></div>`).join("")}</details>` : ""}
-      </div>`;
-    }).join("");
-    return `<div class="ihead" style="margin-top:8px"><h2 class="sect-title">${esc(JOURS[j] || j)}</h2></div>${rows}`;
-  }).join("") || `<div class="card"><p class="muted">Aucune partie planifiée. Les parties se créent dans « Animations ».</p></div>`;
-  return `<p class="mini" style="margin:8px 2px">Inscription libre, à tout moment, indépendante du comptage des entrées.</p>${body}`;
+  const jourBtns = jours.map((j) => `<button class="pill-btn${j === jour ? " on" : ""}" data-jour="${j}">${esc(JOURS[j] || j)}</button>`).join("");
+  // Le jour même, les parties terminées sont masquées (case pour les revoir).
+  const now = jourDuFestival() === jour ? (() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); })() : null;
+  const duJour = parties.filter((p) => p.jour === jour).sort((a, b) => (a.debut || "").localeCompare(b.debut || ""));
+  const terminees = now == null ? 0 : duJour.filter((p) => enMinutes(p.fin) <= now).length;
+  const visibles = now == null || voirTerminees ? duJour : duJour.filter((p) => enMinutes(p.fin) > now);
+  const rows = visibles.map((p) => {
+    const jeu = p.jeux_editions?.jeux?.titre || "Partie";
+    const t = p.elements?.numero ? `Table n°${p.elements.numero}` : "";
+    const pris = nbPar.get(p.id) || 0;
+    const reste = p.places != null ? p.places - pris : null;
+    const full = reste != null && reste <= 0;
+    const mine = insc.filter((i) => i.partie_id === p.id);
+    return `<div class="card insc-card">
+      <div class="ihead"><h3>${esc((p.debut || "").slice(0, 5))}–${esc((p.fin || "").slice(0, 5))} · ${esc(jeu)}</h3>
+        <span class="tag ${full ? "bad" : "ok"}">${p.places != null ? `${pris}/${p.places}` : `${pris}`} inscrit${pris > 1 ? "s" : ""}${full ? " · complet" : ""}</span></div>
+      <div class="muted" style="margin:-4px 0 8px">${esc(t)}</div>
+      <div class="filters" style="align-items:flex-end">
+        <label>Nom (optionnel)<input data-inom="${p.id}" placeholder="Famille, prénom…"${full ? " disabled" : ""}></label>
+        <label>Nombre<input type="number" min="1" value="1"${reste != null ? ` max="${reste}"` : ""} data-inb="${p.id}" style="width:80px"${full ? " disabled" : ""}></label>
+        <button class="btn primary" data-iadd="${p.id}"${full ? " disabled" : ""}>${full ? "Complet" : "Inscrire"}</button>
+        ${reste != null && !full ? `<span class="muted">${reste} place${reste > 1 ? "s" : ""} restante${reste > 1 ? "s" : ""}</span>` : ""}
+      </div>
+      ${mine.length ? `<details class="insc-list"><summary>${mine.length} inscription${mine.length > 1 ? "s" : ""}</summary>
+        ${mine.map((i) => `<div class="insc-row"><span>${esc(i.nom || "—")} · ${i.nb} pers.</span><button class="btn small danger" data-idel="${i.id}" aria-label="Supprimer l'inscription">×</button></div>`).join("")}</details>` : ""}
+    </div>`;
+  }).join("") || `<div class="card"><p class="muted">${duJour.length ? "Toutes les parties de la journée sont terminées." : `Aucune partie ${esc((JOURS[jour] || jour).toLowerCase())}. Les parties se créent dans « Animations ».`}</p></div>`;
+  const opt = terminees ? `<label class="chk-inline"><input type="checkbox" id="i-term"${voirTerminees ? " checked" : ""}> Afficher les ${terminees} partie${terminees > 1 ? "s" : ""} terminée${terminees > 1 ? "s" : ""}</label>` : "";
+  return `<div class="salle-tabs">${jourBtns}</div>
+    <p class="mini" style="margin:8px 2px">Inscription libre, à tout moment, indépendante du comptage des entrées.</p>${opt}${rows}`;
 }
 
 /* ---------- câblage ---------- */
@@ -165,6 +178,7 @@ function wire() {
   const un = root.querySelector("#e-undo"); if (un) un.onclick = undoGroup;
   root.querySelectorAll("[data-iadd]").forEach((b) => (b.onclick = () => inscrire(b.dataset.iadd)));
   root.querySelectorAll("[data-idel]").forEach((b) => (b.onclick = () => delInsc(b.dataset.idel)));
+  const term = root.querySelector("#i-term"); if (term) term.onchange = () => { voirTerminees = term.checked; draw(); };
 }
 
 async function validerGroupe() {
