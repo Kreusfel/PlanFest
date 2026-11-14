@@ -1,17 +1,21 @@
 // Page publique #/public/programme/<editionId> — programme des animations (sans compte).
 import { supa } from "../supabase.js";
 import { esc } from "../ui/util.js";
-import { publicShell } from "./layout.js";
+import { publicShell, infosPratiques } from "./layout.js";
 
 const JOUR_LBL = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
 
 export async function render(app, editionId) {
   app.innerHTML = publicShell("programme", editionId, `<p class="muted">Chargement…</p>`);
   if (!editionId) { app.innerHTML = publicShell("programme", "", `<p>Lien incomplet.</p>`); return; }
-  const { data, error } = await supa.rpc("programme_public", { p_edition: editionId });
+  const [{ data, error }, ed] = await Promise.all([
+    supa.rpc("programme_public", { p_edition: editionId }),
+    supa.rpc("edition_public", { p_edition: editionId }),
+  ]);
+  const infos = infosPratiques(ed.data);
   if (error) { app.innerHTML = publicShell("programme", editionId, `<p>Programme indisponible pour le moment.</p>`); return; }
   if (!data || !data.length) {
-    app.innerHTML = publicShell("programme", editionId, `<p>Le programme n'est pas encore publié. Reviens bientôt !</p>`);
+    app.innerHTML = publicShell("programme", editionId, infos + `<p>Le programme n'est pas encore publié. Reviens bientôt !</p>`);
     return;
   }
   const byJour = {};
@@ -32,5 +36,5 @@ export async function render(app, editionId) {
       <table class="pub-table"><tbody>${rows}</tbody></table></section>`;
   }).join("");
   const note = `<p class="pub-note">📍 Les inscriptions aux animations se font <b>sur place, à l'accueil du festival</b> — dans la limite des places disponibles.</p>`;
-  app.innerHTML = publicShell("programme", editionId, note + sections);
+  app.innerHTML = publicShell("programme", editionId, infos + note + sections);
 }

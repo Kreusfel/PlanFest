@@ -56,11 +56,6 @@ export async function render(c) {
         <span class="muted">samedi ${esc(e.date_samedi)} · ${ETATS[e.etat] || e.etat}</span>
         ${e.programme_publie ? `<span class="mini">Programme public : <a href="#/public/programme/${e.id}">ouvrir</a> · <button class="link" data-copy="${esc(lien(e.id))}">copier le lien</button></span><div class="qr" title="QR du programme public">${qrSVG(lien(e.id))}</div>` : ""}
         ${isAdmin() ? reglagesForm(e) : ""}
-        ${isAdmin() ? `<details class="pub-editor"><summary>Contenu public (visiteurs)</summary>
-          <label>Texte de présentation (activités, food trucks, partenaires…)
-            <textarea data-pres="${e.id}" placeholder="Décris le festival pour les visiteurs…">${esc(e.presentation || "")}</textarea></label>
-          <button class="btn primary" data-savepub="${e.id}">Enregistrer</button>
-        </details>` : ""}
         ${isAdmin() ? `<div class="dup-form" data-dupform="${e.id}" hidden>
           <div class="row2">
             <label>Nom de la copie<input data-dupnom="${e.id}" value="${esc(e.nom)} (copie)"></label>
@@ -192,15 +187,6 @@ export async function render(c) {
     if (error || !sup?.length) { msg.textContent = "Suppression impossible" + (error ? " : " + error.message : " (droits insuffisants)."); return; }
     if (store.editionId === ed.id) setEdition(null);
     location.reload();  // la barre latérale (sélecteur d'édition) doit oublier l'édition supprimée
-  }));
-
-  c.querySelectorAll("[data-savepub]").forEach((b) => (b.onclick = async () => {
-    const id = b.dataset.savepub;
-    const pres = c.querySelector(`[data-pres="${id}"]`).value || null;
-    msg.textContent = "Enregistrement…";
-    const { error } = await supa.from("editions").update({ presentation: pres }).eq("id", id);
-    msg.textContent = error ? "Erreur : " + error.message : "Contenu public enregistré.";
-    if (!error) reload();
   }));
 
   const cr = c.querySelector("#n-create");

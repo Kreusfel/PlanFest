@@ -2,7 +2,7 @@
 // + récap auto des exposants confirmés. Sans compte.
 import { supa } from "../supabase.js";
 import { esc, safeUrl } from "../ui/util.js";
-import { publicShell } from "./layout.js";
+import { publicShell, infosPratiques } from "./layout.js";
 
 const ROLE_LBL = { partenaire: "Partenaire", editeur: "Éditeur", sponsor: "Sponsor" };
 
@@ -43,8 +43,9 @@ export async function render(app, editionId) {
         <div class="grid g3">${soutiens.map((e) => expoCard(e, false)).join("")}</div></section>`
     : "";
 
-  const body = intro || sectionExpo || sectionSoutien
-    ? intro + sectionExpo + sectionSoutien
+  const infos = infosPratiques(ed.data);
+  const body = infos || intro || sectionExpo || sectionSoutien
+    ? infos + intro + sectionExpo + sectionSoutien
     : `<p>Les informations ne sont pas encore publiées.</p>`;
   app.innerHTML = publicShell("infos", editionId, body);
 }

@@ -19,6 +19,23 @@ export function publicShell(active, editionId, body) {
   </div>`;
 }
 
+// Bandeau « infos pratiques » : dates des jours du festival, horaires, lieu.
+// `ed` = résultat de la RPC edition_public.
+const JOUR_DECALAGE = { ven: -1, sam: 0, dim: 1 };
+export function infosPratiques(ed) {
+  if (!ed || !ed.date_samedi) return "";
+  const jours = (ed.jours_actifs?.length ? ed.jours_actifs : ["sam", "dim"]);
+  const horaire = (j) => (ed.horaires || []).find((h) => h.jour === j);
+  const lignes = ["ven", "sam", "dim"].filter((j) => jours.includes(j)).map((j) => {
+    const d = new Date(ed.date_samedi + "T12:00:00"); d.setDate(d.getDate() + JOUR_DECALAGE[j]);
+    const date = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+    const h = horaire(j);
+    return `<li><b>${esc(date.charAt(0).toUpperCase() + date.slice(1))}</b>${h ? ` · ${esc(h.debut)}–${esc(h.fin)}` : ""}</li>`;
+  }).join("");
+  return `<section class="card pub-infos"><ul class="pub-infos-dates">${lignes}</ul>
+    ${ed.lieu ? `<p class="pub-infos-lieu">📍 ${esc(ed.lieu)}</p>` : ""}</section>`;
+}
+
 // Résout l'édition publiée (pour #/public sans identifiant).
 export async function editionPubliee() {
   const { data } = await supa.rpc("edition_publiee");

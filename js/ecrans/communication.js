@@ -24,7 +24,7 @@ export async function render(container) {
   const [cc, ce, edr, oe] = await Promise.all([
     supa.from("comm_contacts").select("*").order("type").order("nom"),
     supa.from("comm_envois").select("contact_id,statut").eq("edition_id", store.editionId),
-    supa.from("editions").select("id,nom,presentation,programme_publie").eq("id", store.editionId).single(),
+    supa.from("editions").select("id,nom,presentation,lieu,programme_publie").eq("id", store.editionId).single(),
     supa.from("organisme_editions").select("id,logo_url,statut,roles,organismes(nom)").eq("edition_id", store.editionId).eq("statut", "confirme"),
   ]);
   contacts = cc.data || [];
@@ -129,8 +129,10 @@ function publicTab() {
       ${pub ? `<div class="qr" style="margin-top:12px" title="QR du programme public">${qrSVG(lien)}</div>` : ""}
       <p class="msg" id="pub-msg"></p></div>
 
-    <div class="card"><div class="ihead"><h3>Texte de présentation (visiteurs)</h3></div>
-      <label>Activités, food trucks, partenaires présents…
+    <div class="card"><div class="ihead"><h3>Infos pour les visiteurs</h3></div>
+      <label>Lieu / adresse<input id="lieu" value="${esc(edRow.lieu || "")}" placeholder="Salle…, rue…, 76400 Fécamp"${canWrite() ? "" : " disabled"}></label>
+      <p class="mini">Affiché en haut des pages publiques avec les dates et les horaires (réglés dans Éditions).</p>
+      <label>Texte de présentation (activités, food trucks, partenaires présents…)
         <textarea id="pres" rows="6"${canWrite() ? "" : " disabled"} placeholder="Décris le festival pour les visiteurs…">${esc(edRow.presentation || "")}</textarea></label>
       ${canWrite() ? `<button class="btn primary" id="pres-save">Enregistrer</button>` : ""}
       <span class="muted" id="pres-msg"></span></div>
@@ -262,8 +264,9 @@ async function togglePub() {
 }
 async function savePres() {
   const pres = root.querySelector("#pres").value || null;
+  const lieu = root.querySelector("#lieu")?.value || "";
   const m = root.querySelector("#pres-msg"); if (m) m.textContent = "…";
-  const { error } = await supa.rpc("maj_contenu_public", { p_edition: store.editionId, p_presentation: pres });
+  const { error } = await supa.rpc("maj_contenu_public", { p_edition: store.editionId, p_presentation: pres, p_lieu: lieu });
   if (error) { if (m) m.textContent = "Erreur : " + error.message; return; }
-  edRow.presentation = pres; if (m) m.textContent = "Enregistré.";
+  edRow.presentation = pres; edRow.lieu = lieu.trim() || null; if (m) m.textContent = "Enregistré.";
 }

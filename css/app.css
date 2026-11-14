@@ -448,3 +448,7 @@ input[type=color]{padding:3px;height:44px}
 .pres-autres>summary{cursor:pointer;font-weight:600;color:var(--muted);font-size:13px;margin-bottom:6px}
 .kpi-n1{font-size:11px;color:var(--muted);margin-top:2px}
 .t-etat{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px}
+.pub-infos{padding:12px 16px}
+.pub-infos-dates{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.pub-infos-lieu{margin:8px 0 0}
+.pub-chk{margin:6px 0}
