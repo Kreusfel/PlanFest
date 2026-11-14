@@ -11,6 +11,8 @@ const STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso:
 const USAGES = [["animation", "Animation"], ["bar", "Bar à jeux"], ["tombola", "Tombola"]];
 const BGG = `<p class="mini bgg-foot">Données et images : <a href="https://boardgamegeek.com" target="_blank" rel="noopener">Powered by BGG</a></p>`;
 
+let edIds = new Set(), edIdsIci = new Set();  // organismes éditeurs (toutes éditions / cette édition)
+const bggEditeurs = new Map();  // jeu_id → éditeurs proposés par BGG (import ou mise à jour)
 let root, list = [], cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = [], loadErr = "";
 let filt = { q: "", statut: "", categorie: "", editeur: "", sansAnim: false };
 let view = { mode: "list", id: null, tab: "editeurs" };
@@ -40,14 +42,17 @@ export async function render(container, sub) {
 async function load() {
   loadErr = "";
   const ed = store.editionId;
-  const [je, c, o, cp, be, el] = await Promise.all([
+  const [je, c, o, cp, be, el, oed] = await Promise.all([
     supa.from("jeux_editions").select("*, jeux(*)").eq("edition_id", ed),
     supa.from("categories_jeux").select("id,nom,type,ordre").order("ordre"),
     supa.from("organismes").select("id,nom").order("nom"),
     supa.from("competences").select("benevole_id, jeu_id, categorie_id, niveau"),
     supa.from("benevoles_editions").select("benevole:benevoles(id,nom)").eq("edition_id", ed),
     supa.from("elements").select("id, numero, salle_id, salles(nom)").eq("edition_id", ed).eq("kind", "table"),
+    supa.from("organisme_editions").select("organisme_id, edition_id").contains("roles", ["editeur"]),
   ]);
+  edIds = new Set((oed.data ?? []).map((x) => x.organisme_id));
+  edIdsIci = new Set((oed.data ?? []).filter((x) => x.edition_id === ed).map((x) => x.organisme_id));
   if (je.error) { loadErr = je.error.message; list = []; } else list = (je.data ?? []).filter((x) => x.jeux);
   cats = c.data ?? []; orgs = o.data ?? []; comps = cp.data ?? [];
   // Bénévoles de l'édition courante uniquement (competences est au niveau personne, persistant).
@@ -189,9 +194,29 @@ function catSel(id, attr) {
   return `<select ${attr}="categorie_id"><option value="">— catégorie —</option>${
     cats.map((c) => `<option value="${c.id}"${c.id === id ? " selected" : ""}>${esc(c.nom)}</option>`).join("")}</select>`;
 }
+// Nom comparable (même règle que nom_comparable en base) : minuscules, sans accents ni ponctuation.
+const comparable = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// Éditeurs proposés : organismes ayant le rôle éditeur (une édition ou une autre),
+// un seul par nom (celui inscrit sur cette édition de préférence).
+function editeursListe() {
+  const parNom = new Map();
+  orgs.filter((o) => edIds.has(o.id)).forEach((o) => {
+    const k = comparable(o.nom), cur = parNom.get(k);
+    if (!cur || (!edIdsIci.has(cur.id) && edIdsIci.has(o.id))) parNom.set(k, o);
+  });
+  return [...parNom.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+}
+// Premier éditeur BGG qui existe déjà chez nous.
+function editeurConnu(nomsBgg) {
+  const connus = new Map(editeursListe().map((o) => [comparable(o.nom), o.id]));
+  for (const n of nomsBgg || []) { const id = connus.get(comparable(n)); if (id) return id; }
+  return null;
+}
 function editeurSel(id, attr) {
+  const opts = editeursListe();
+  if (id && !opts.some((o) => o.id === id)) { const o = orgs.find((x) => x.id === id); if (o) opts.unshift(o); }
   return `<select ${attr}="editeur_id"><option value="">— éditeur —</option>${
-    orgs.map((o) => `<option value="${o.id}"${o.id === id ? " selected" : ""}>${esc(o.nom)}</option>`).join("")}</select>`;
+    opts.map((o) => `<option value="${o.id}"${o.id === id ? " selected" : ""}>${esc(o.nom)}</option>`).join("")}</select>`;
 }
 // Catégorie suggérée depuis l'âge min BGG (jamais imposée).
 function suggestCat(age) {
@@ -228,6 +253,7 @@ function ficheView() {
         ${f("Titre", `<input data-j="titre" value="${esc(j.titre)}"${ro}>`)}
         <div class="row2">${f("Année", `<input type="number" data-j="annee" value="${j.annee ?? ""}"${ro}>`)}${f("Catégorie", catSel(j.categorie_id, "data-j"))}</div>
         <label>Éditeur<div class="with-link">${editeurSel(j.editeur_id, "data-j")}${j.editeur_id ? `<a class="link" href="#/organismes/editeurs">Voir la fiche</a>` : ""}</div></label>
+        ${w ? ajoutEditeur(j) : ""}
         <div class="row2">${f("Joueurs min", `<input type="number" data-j="joueurs_min" value="${j.joueurs_min ?? ""}"${ro}>`)}${f("Joueurs max", `<input type="number" data-j="joueurs_max" value="${j.joueurs_max ?? ""}"${ro}>`)}</div>
         <div class="row2">${f("Durée (min)", `<input type="number" data-j="duree_min" value="${j.duree_min ?? ""}"${ro}>`)}${f("Âge min", `<input type="number" data-j="age_min" value="${j.age_min ?? ""}"${ro}>`)}</div>
         <label>Ludothèque<div class="chk-row"><span class="chk-inline"><input type="checkbox" data-jbool="ludotheque"${j.ludotheque ? " checked" : ""}${ro}> Jeu de l'asso (apparaît dans le triage Ludothèque)</span></div></label>
@@ -247,6 +273,41 @@ function ficheView() {
       </div>
     </div>
     <p class="msg" id="j-msg"></p>`;
+}
+
+// Ajout d'un éditeur absent de la liste : noms proposés par BGG, ou saisie libre.
+// Un nom déjà connu (même sans accents/majuscules) réutilise la fiche existante.
+function ajoutEditeur(j) {
+  const bgg = bggEditeurs.get(j.id) || [];
+  const rapides = !j.editeur_id && bgg.length
+    ? `<div class="chk-row">${bgg.slice(0, 6).map((n) => `<button type="button" class="btn small" data-addeditor="${esc(n)}">+ ${esc(n)}</button>`).join("")}</div>` : "";
+  return `<details class="pub-editor"${!j.editeur_id && bgg.length ? " open" : ""}><summary>Éditeur absent de la liste ?</summary>
+    ${bgg.length ? `<p class="mini">Éditeurs indiqués par BGG (l'éditeur d'origine d'abord) :</p>${rapides}` : ""}
+    <div class="filters" style="align-items:flex-end">
+      <label>Nom de l'éditeur<input id="new-ed" list="bgg-ed-dl" placeholder="ex. Asmodee"></label>
+      <datalist id="bgg-ed-dl">${bgg.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <button type="button" class="btn small primary" id="new-ed-go">Ajouter comme éditeur</button>
+    </div>
+    <p class="mini">Il est ajouté aux éditeurs de cette édition (statut « À contacter ») et rattaché à ce jeu.</p></details>`;
+}
+async function ajouterEditeur(nom) {
+  nom = (nom || "").trim();
+  const je = list.find((x) => x.id === view.id); if (!je || !nom) return;
+  const msg = root.querySelector("#j-msg");
+  if (msg) msg.textContent = "Ajout de l'éditeur…";
+  const { data, error } = await supa.rpc("ajouter_organisme", { p_edition: store.editionId, p_nom: nom, p_roles: ["editeur"], p_infos: {} });
+  if (error) { if (msg) msg.textContent = "Erreur : " + error.message; return; }
+  const orgId = data.organisme_id;
+  const { error: e2 } = await supa.from("jeux").update({ editeur_id: orgId }).eq("id", je.jeu_id);
+  if (e2) { if (msg) msg.textContent = "Erreur : " + e2.message; return; }
+  je.jeux.editeur_id = orgId;
+  if (!orgs.some((o) => o.id === orgId)) orgs.push({ id: orgId, nom });
+  edIds.add(orgId); edIdsIci.add(orgId);
+  // Mise à jour sur place (sans redessiner la fiche : les autres champs en cours de saisie sont gardés).
+  const sel = root.querySelector('[data-j="editeur_id"]');
+  if (sel) { sel.outerHTML = editeurSel(orgId, "data-j"); }
+  root.querySelector(".pub-editor")?.removeAttribute("open");
+  if (msg) msg.textContent = data.existait ? `Éditeur existant « ${orgNom(orgId)} » rattaché au jeu.` : `Éditeur « ${nom} » ajouté et rattaché au jeu.`;
 }
 
 /* ---------- câblage ---------- */
@@ -273,6 +334,9 @@ async function onClick(e) {
   if (t.closest("#m-create")) return createManual();
   if (t.closest("#save")) return saveFiche();
   if (t.closest("#bgg-update")) return bggUpdate();
+  const addEd = t.closest("[data-addeditor]");
+  if (addEd) return ajouterEditeur(addEd.dataset.addeditor);
+  if (t.closest("#new-ed-go")) return ajouterEditeur(root.querySelector("#new-ed")?.value);
   if (t.closest("#f-sansanim")) { filt.sansAnim = !filt.sansAnim; return go(); }
   const imp = t.closest("[data-import]");
   if (imp) return importBgg((bggResults || [])[+imp.dataset.import]);
@@ -311,6 +375,7 @@ async function importBgg(r) {
     bgg_id: r.bgg_id, titre: r.titre, annee: r.annee, image_url: r.image_url, miniature_url: r.miniature_url,
     joueurs_min: r.joueurs_min, joueurs_max: r.joueurs_max, duree_min: r.duree_min, age_min: r.age_min,
     categorie_id: suggestCat(r.age_min) || null,
+    editeur_id: editeurConnu(r.editeurs),
     ludotheque: false,  // jeu d'éditeur : n'entre pas dans le tri de la ludothèque
   }).select().single();
   if (e1) { if (msg) msg.textContent = e1.message.includes("duplicate") ? "Ce jeu est déjà au catalogue." : "Erreur : " + e1.message; return; }
@@ -318,6 +383,7 @@ async function importBgg(r) {
     .insert({ jeu_id: jeu.id, edition_id: store.editionId, statut: "souhaite", usages: ["animation"] })
     .select("*, jeux(*)").single();
   if (e2) { if (msg) msg.textContent = "Jeu créé mais erreur sur l'édition : " + e2.message; return; }
+  bggEditeurs.set(jeu.id, r.editeurs || []);
   list.push(je); view = { mode: "fiche", id: je.id }; go();
 }
 async function bggUpdate() {
@@ -328,6 +394,8 @@ async function bggUpdate() {
   const patch = { titre: data.titre || je.jeux.titre, annee: data.annee, image_url: data.image_url,
     miniature_url: data.miniature_url, joueurs_min: data.joueurs_min, joueurs_max: data.joueurs_max,
     duree_min: data.duree_min, age_min: data.age_min };
+  bggEditeurs.set(je.jeu_id, data.editeurs || []);
+  if (!je.jeux.editeur_id) { const id = editeurConnu(data.editeurs); if (id) patch.editeur_id = id; }
   const { error: e2 } = await supa.from("jeux").update(patch).eq("id", je.jeu_id);
   if (e2) { if (msg) msg.textContent = "Erreur : " + e2.message; return; }
   Object.assign(je.jeux, patch); go();
@@ -374,6 +442,11 @@ async function saveFiche() {
     supa.from("jeux_editions").update(ePatch).eq("id", je.id),
   ]);
   if (r1.error || r2.error) { msg.textContent = "Erreur : " + (r1.error?.message || r2.error?.message); return; }
+  // Éditeur choisi parmi ceux d'une édition passée : l'inscrire aussi sur celle-ci.
+  if (jPatch.editeur_id && !edIdsIci.has(jPatch.editeur_id)) {
+    const { error } = await supa.rpc("ajouter_organisme", { p_edition: store.editionId, p_nom: orgNom(jPatch.editeur_id), p_roles: ["editeur"], p_infos: {} });
+    if (!error) edIdsIci.add(jPatch.editeur_id);
+  }
   Object.assign(je.jeux, jPatch); Object.assign(je, ePatch);
   view = { mode: "list", id: null }; go();
 }

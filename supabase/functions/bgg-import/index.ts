@@ -29,6 +29,14 @@ function tagText(xml: string, tag: string): string | null {
   const m = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
   return m ? decode(m[1]) : null;
 }
+// Éditeurs du jeu (liens « boardgamepublisher ») : l'éditeur d'origine d'abord, puis les
+// éditions étrangères. Les mentions génériques de BGG sont écartées.
+function editeurs(itemXml: string): string[] {
+  const noms = [...itemXml.matchAll(/<link[^>]*type="boardgamepublisher"[^>]*value="([^"]*)"/g)]
+    .map((m) => decode(m[1]).trim())
+    .filter((n) => n && !/^\((uncredited|web published|self-published)\)$/i.test(n));
+  return [...new Set(noms)].slice(0, 20);
+}
 function parseItem(itemXml: string) {
   const id = (itemXml.match(/id="(\d+)"/) || [])[1];
   const name = (itemXml.match(/<name[^>]*type="primary"[^>]*value="([^"]*)"/) || [])[1]
@@ -43,6 +51,7 @@ function parseItem(itemXml: string) {
     age_min: num(attr(itemXml, "minage")),
     image_url: tagText(itemXml, "image"),
     miniature_url: tagText(itemXml, "thumbnail"),
+    editeurs: editeurs(itemXml),
   };
 }
 // BGG renvoie parfois 202 (requête en file) ou 429/503 (débit) : on réessaie avec un backoff.

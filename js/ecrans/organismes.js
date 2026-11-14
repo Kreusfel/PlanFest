@@ -4,7 +4,7 @@
 import { supa } from "../supabase.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
-import { esc, plur, aujourdhui } from "../ui/util.js";
+import { esc, plur, aujourdhui, toast } from "../ui/util.js";
 
 const ROLES = [["partenaire", "Partenaire"], ["editeur", "Éditeur"], ["sponsor", "Sponsor"]];
 const STATUTS = [["invite", "À contacter"], ["relance", "À relancer"], ["confirme", "Confirmé"], ["refuse", "Refusé"]];
@@ -377,20 +377,21 @@ async function createOrg() {
   const nom = (root.querySelector("#o-nom").value || "").trim();
   if (!nom) { msg.textContent = "Nom requis."; return; }
   const roles = [...root.querySelectorAll("[data-role]:checked")].map((c) => c.dataset.role);
+  if (!roles.length) { msg.textContent = "Coche au moins un rôle."; return; }
   msg.textContent = "Création…";
-  const { data: org, error: e1 } = await supa.from("organismes")
-    .insert({ nom, site: root.querySelector("#o-site").value || null,
-      contact_nom: root.querySelector("#o-contact").value || null,
-      contact_email: root.querySelector("#o-email").value || null }).select().single();
-  if (e1) { msg.textContent = "Erreur : " + e1.message; return; }
-  const { data: oe, error: e2 } = await supa.from("organisme_editions")
-    .insert({ organisme_id: org.id, edition_id: store.editionId, roles,
-      statut: root.querySelector("#o-statut").value,
-      couleur: root.querySelector("#o-couleur").value }).select("*, organismes(*)").single();
-  if (e2) { msg.textContent = "Organisme créé mais erreur sur l'édition : " + e2.message; return; }
-  list.push(oe);
-  view = { mode: "fiche", id: oe.id };
+  // Un organisme du même nom (sans tenir compte des majuscules/accents) est réutilisé :
+  // pas de doublon d'une édition à l'autre (migration 043).
+  const { data, error } = await supa.rpc("ajouter_organisme", {
+    p_edition: store.editionId, p_nom: nom, p_roles: roles,
+    p_infos: { statut: root.querySelector("#o-statut").value, couleur: root.querySelector("#o-couleur").value,
+      site: root.querySelector("#o-site").value || "", contact_nom: root.querySelector("#o-contact").value || "",
+      contact_email: root.querySelector("#o-email").value || "" },
+  });
+  if (error) { msg.textContent = "Erreur : " + error.message; return; }
+  await load();
+  view = { mode: "fiche", id: data.organisme_edition_id };
   go();
+  if (data.existait) toast(`« ${nom} » existait déjà : la fiche existante est reprise pour cette édition.`, "ok");
 }
 
 async function saveFiche() {
