@@ -88,30 +88,19 @@ const NAV = [
   { group: "Réglages", path: "/admin", label: "Administration", can: () => isAdmin(), poles: [] },
 ];
 
-// Couleur et nom par pôle : pastilles de repérage dans la nav + légende.
-const POLE_COLORS = {
-  partenaires: "#2563EB", jeux_editeurs: "#7C3AED", animateurs_benevoles: "#16A34A",
-  buvette_catering: "#EA580C", sponsors: "#0D9488", communication: "#DB2777",
-  logistique_securite: "#CA8A04", intergenerationnelle: "#0EA5E9",
-};
+// Nom par pôle (sélecteur « Voir en tant que » des admins).
 const POLE_NOMS = {
   partenaires: "Partenaires", jeux_editeurs: "Jeux & éditeurs", animateurs_benevoles: "Animateurs & bénévoles",
   buvette_catering: "Buvette & catering", sponsors: "Sponsors", communication: "Communication",
   logistique_securite: "Logistique & sécurité", intergenerationnelle: "Intergénérationnelle",
 };
-const poleDots = (n) => (n.poles || []).map((p) => `<i class="poledot" style="background:${POLE_COLORS[p] || "#ccc"}" title="${esc(POLE_NOMS[p] || p)}"></i>`).join("");
-function poleLegend() {
-  return `<details class="pole-legend"><summary>Légende des pôles</summary>
-    <div class="pole-legend-grid">${Object.entries(POLE_NOMS).map(([code, nom]) => `<span><i class="poledot" style="background:${POLE_COLORS[code]}"></i>${esc(nom)}</span>`).join("")}</div></details>`;
-}
-
 // Construit la barre de navigation : si l'utilisateur est responsable d'un pôle
 // (hors admin), ses écrans remontent dans un groupe « Mon pôle » ; le reste suit,
 // visible mais atténué (secondaire).
 function buildNav(path) {
   const items = NAV.filter((x) => x.can());
   const myPoles = isAdmin() ? [] : session.poles;
-  const link = (n, cls) => `<a href="#${n.path}" class="navlink${cls}${n.path === path ? " on" : ""}"><span>${esc(n.label)}</span>${(n.poles || []).length ? `<span class="poledots">${poleDots(n)}</span>` : ""}</a>`;
+  const link = (n, cls) => `<a href="#${n.path}" class="navlink${cls}${n.path === path ? " on" : ""}"><span>${esc(n.label)}</span></a>`;
   const shown = new Set();
   const take = (pred) => { const a = items.filter((n) => !shown.has(n.path) && pred(n)); a.forEach((n) => shown.add(n.path)); return a; };
 
@@ -209,7 +198,6 @@ function renderShell() {
             <option value="">Admin — tout voir</option>
             ${Object.entries(POLE_NOMS).map(([code, nom]) => `<option value="${code}"${(simPoles() || []).includes(code) ? " selected" : ""}>${esc(nom)}</option>`).join("")}
           </select></label>` : ""}
-        ${poleLegend()}
         <div class="who">${esc(session.user.email)}${isAdmin() ? " · admin" : (session.poles.length ? " · responsable" : "")}</div>
         <button class="btn ghost small" id="signout">Déconnexion</button>
       </div>

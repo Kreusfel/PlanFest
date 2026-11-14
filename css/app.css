@@ -41,17 +41,8 @@ a{color:var(--primary)}
 .navlink.on{background:#111;color:#fff}
 .navlink .n{background:var(--primary);color:#fff;border-radius:999px;font-size:11px;padding:0 7px;font-weight:600}
 .navlink>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.poledots{display:inline-flex;gap:3px;align-items:center;flex:0 0 auto;margin-left:8px}
-.poledot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:0 0 auto}
 .view-as{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);margin-bottom:8px}
 .view-as select{min-height:34px;padding:5px 8px;font-size:13px;color:var(--ink)}
-.pole-legend{margin-bottom:6px;font-size:11px}
-.pole-legend>summary{cursor:pointer;color:var(--muted);padding:4px 2px;list-style:none}
-.pole-legend>summary::-webkit-details-marker{display:none}
-.pole-legend>summary::before{content:"▸ "}
-.pole-legend[open]>summary::before{content:"▾ "}
-.pole-legend-grid{display:flex;flex-direction:column;gap:4px;padding:6px 2px 2px}
-.pole-legend-grid span{display:flex;align-items:center;gap:7px;color:var(--muted)}
 .grp-pole{color:var(--primary)}
 .nav-sep{height:1px;background:var(--line);margin:8px 6px}
 .grp.secondary{opacity:1;color:var(--muted)}
