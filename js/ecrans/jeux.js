@@ -1,10 +1,11 @@
 // Écran #/jeux — tous les jeux, en un seul endroit.
-//  - Onglet « Festival » : les jeux de l'édition (jeux de l'asso pris au tri + jeux
-//    demandés aux éditeurs), filtres, alerte « sans animateur ».
+//  - Onglet « Festival » : les jeux de l'édition (jeux de l'asso pris au tri + jeux à
+//    obtenir : don, achat ou prêt), filtres, alerte « sans animateur ».
 //  - Onglet « Ludothèque de l'asso » : l'inventaire permanent, avec le choix
 //    Oui / Bar à jeux / Non pour l'édition en un clic (ou « Trier rapidement »).
 //  - Un seul ajout : on cherche d'abord dans nos jeux (pas de doublon), puis sur BGG ;
-//    on dit si c'est un jeu de l'asso ou d'éditeur. Saisie à la main et CSV au même endroit.
+//    on dit si c'est un jeu de l'asso ou un jeu à obtenir (don, achat, prêt). Saisie à la
+//    main et CSV au même endroit.
 //  - Une seule fiche par jeu : infos du jeu + bloc « Ce festival ».
 // Le tri (ludotheque_choix) alimente la sélection par un déclencheur en base (migration 036).
 // Sous-adresses : #/jeux/festival · #/jeux/ludo · #/jeux/<id organisme> (filtre éditeur).
@@ -15,9 +16,20 @@ import { esc, plur, toast } from "../ui/util.js";
 import { parseCSV, norm } from "../ui/csv.js";
 import * as swipe from "./selection-swipe.js";
 
-const STATUTS_EDITEUR = [["souhaite", "Souhaité"], ["demande", "Demandé"], ["recu", "Reçu"]];
+// Jeux à obtenir pour le festival : don (éditeur ou autre), achat de l'asso, prêt
+// (ludothèque, bar à jeux, boutique…). Mêmes statuts en base, libellés selon la provenance.
+const PROVENANCES = [["don", "Don"], ["achat", "Achat"], ["pret", "Prêt"]];
+const provLbl = (k) => (PROVENANCES.find((x) => x[0] === k) || [k, k])[1];
+const STATUTS_PROV = {
+  don: [["souhaite", "À demander"], ["demande", "Demandé"], ["recu", "Reçu"]],
+  pret: [["souhaite", "À demander"], ["demande", "Demandé"], ["recu", "Reçu"]],
+  achat: [["souhaite", "À acheter"], ["demande", "Commandé"], ["recu", "Reçu"]],
+};
+const statutsDe = (prov) => STATUTS_PROV[prov] || STATUTS_PROV.don;
 const STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso: "blue" };
-const statutLbl = (k) => ({ souhaite: "Souhaité", demande: "Demandé", recu: "Reçu", deja_asso: "Déjà à l'asso" })[k] || k;
+const statutLbl = (k, prov = "don") => (k === "deja_asso" ? "Jeu de l'asso" : (statutsDe(prov).find((x) => x[0] === k) || [k, k])[1]);
+// Auprès de qui : texte saisi, sinon l'éditeur pour un don.
+const source = (je, j) => je.provenance_detail || (je.provenance === "don" && j.editeur_id ? orgNom(j.editeur_id) : "");
 const USAGES = [["animation", "Animation"], ["bar", "Bar à jeux"], ["tombola", "Tombola"]];
 const CHOIX = [["oui", "Oui", "ok"], ["bar", "Bar", "amber"], ["non", "Non", "grey"]];
 const BGG = `<p class="mini bgg-foot">Données et images : <a href="https://boardgamegeek.com" target="_blank" rel="noopener">Powered by BGG</a></p>`;
@@ -31,9 +43,9 @@ let cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = 
 let edIds = new Set(), edIdsIci = new Set();   // organismes éditeurs (toutes éditions / cette édition)
 const bggEditeurs = new Map();                 // jeu_id → éditeurs proposés par BGG
 let tab = "festival", mode = "list", ficheId = null;
-let filt = { q: "", origine: "", usage: "", categorie: "", editeur: "", sansAnim: false };
+let filt = { q: "", origine: "", prov: "", usage: "", categorie: "", editeur: "", sansAnim: false };
 let ludoQ = "", ludoNonDecides = false;
-let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "", ean: "" };  // ean : code-barre inconnu à associer
+let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "" };  // ean : code-barre inconnu à associer
 let csvMsg = "";
 
 const canWrite = () => isAdmin() || hasPole("jeux_editeurs");
@@ -192,7 +204,7 @@ function entete() {
   const nsa = [...sel.values()].filter(sansAnimateur).length;
   const nLudo = [...jeux.values()].filter((j) => j.ludotheque).length;
   return `<div class="page-head"><div><h1>Jeux</h1>
-      <div class="sub">${plur(sel.size, "jeu", "jeux")} au festival (${asso} de l'asso, ${sel.size - asso} d'éditeurs)${nsa ? ` · ${nsa} sans animateur` : ""} · ${plur(nLudo, "jeu", "jeux")} dans la ludothèque</div></div>
+      <div class="sub">${plur(sel.size, "jeu", "jeux")} au festival (${asso} de l'asso, ${sel.size - asso} à obtenir)${nsa ? ` · ${nsa} sans animateur` : ""} · ${plur(nLudo, "jeu", "jeux")} dans la ludothèque</div></div>
       <div class="head-actions">${canWrite() ? `<button class="btn primary" id="ajouter">+ Ajouter un jeu</button>` : ""}</div></div>
     <div class="utabs">
       <button data-tab="festival"${tab === "festival" ? ' class="on"' : ""}>Festival</button>
@@ -208,7 +220,8 @@ function festivalFiltres() {
     const j = jeux.get(je.jeu_id); if (!j) return false;
     if (q && !comparable(j.titre).includes(q)) return false;
     if (filt.origine === "asso" && !j.ludotheque) return false;
-    if (filt.origine === "editeur" && j.ludotheque) return false;
+    if (filt.origine === "obtenir" && j.ludotheque) return false;
+    if (filt.prov && (j.ludotheque || je.provenance !== filt.prov)) return false;
     if (filt.usage && !(je.usages || []).includes(filt.usage)) return false;
     if (filt.categorie && j.categorie_id !== filt.categorie) return false;
     if (filt.editeur && j.editeur_id !== filt.editeur) return false;
@@ -220,7 +233,7 @@ function carte(je) {
   const j = jeux.get(je.jeu_id), nbAnim = animFor(j).anime.length;
   const img = j.miniature_url || j.image_url;
   const origine = j.ludotheque ? `<span class="pill blue">Asso</span>`
-    : `<span class="pill ${STATUT_PILL[je.statut] || "grey"}">${esc(j.editeur_id ? orgNom(j.editeur_id) : "Éditeur")} · ${esc(statutLbl(je.statut))}</span>`;
+    : `<span class="pill ${STATUT_PILL[je.statut] || "grey"}">${esc([provLbl(je.provenance), source(je, j), statutLbl(je.statut, je.provenance)].filter(Boolean).join(" · "))}</span>`;
   const usages = (je.usages || []).map((u) => `<span class="pill grey">${esc(usageLbl(u))}</span>`).join(" ");
   const tbl = je.element_id ? esc(tableLabel(je.element_id) || "Table ?") : "Non placé";
   return `<div class="jeu-card" data-open="${j.id}">
@@ -234,14 +247,15 @@ function carte(je) {
 }
 function festivalView() {
   const grid = festivalFiltres().map(carte).join("")
-    || `<p class="muted">${loadErr ? "Erreur : " + esc(loadErr) : sel.size ? "Aucun jeu pour ces filtres." : "Aucun jeu pour ce festival. Trie la ludothèque ou ajoute un jeu d'éditeur."}</p>`;
+    || `<p class="muted">${loadErr ? "Erreur : " + esc(loadErr) : sel.size ? "Aucun jeu pour ces filtres." : "Aucun jeu pour ce festival. Trie la ludothèque ou ajoute un jeu à obtenir."}</p>`;
   const nsa = [...sel.values()].filter(sansAnimateur).length;
   const opt = (v, cur, l) => `<option value="${v}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
   const eIds = [...new Set([...sel.values()].map((r) => jeux.get(r.jeu_id)?.editeur_id).filter(Boolean))];
   return `<div class="card">
     <div class="jeux-filters">
       <input id="f-q" placeholder="Rechercher un titre…" value="${esc(filt.q)}" aria-label="Rechercher un titre">
-      <select id="f-origine" aria-label="Origine">${opt("", filt.origine, "Asso et éditeurs")}${opt("asso", filt.origine, "Jeux de l'asso")}${opt("editeur", filt.origine, "Jeux d'éditeurs")}</select>
+      <select id="f-origine" aria-label="Origine">${opt("", filt.origine, "Tous les jeux")}${opt("asso", filt.origine, "Jeux de l'asso")}${opt("obtenir", filt.origine, "Jeux à obtenir")}</select>
+      <select id="f-prov" aria-label="Provenance">${opt("", filt.prov, "Toutes provenances")}${PROVENANCES.map(([k, l]) => opt(k, filt.prov, l)).join("")}</select>
       <select id="f-usage" aria-label="Usage">${opt("", filt.usage, "Tous usages")}${USAGES.map(([k, l]) => opt(k, filt.usage, l)).join("")}</select>
       <select id="f-cat" aria-label="Catégorie">${opt("", filt.categorie, "Toutes catégories")}${cats.map((c) => opt(c.id, filt.categorie, c.nom)).join("")}</select>
       <select id="f-editeur" aria-label="Éditeur">${opt("", filt.editeur, "Tous éditeurs")}${eIds.map((id) => opt(id, filt.editeur, orgNom(id))).join("")}</select>
@@ -334,10 +348,10 @@ function trouvesLocaux() {
 }
 function etatLocal(j) {
   const je = sel.get(j.id);
-  if (ajout.ean && !j.ean) return { txt: je ? "Déjà au festival" : (j.ludotheque ? "Dans la ludothèque" : "Jeu d'éditeur connu"),
+  if (ajout.ean && !j.ean) return { txt: je ? "Déjà au festival" : (j.ludotheque ? "Dans la ludothèque" : "Déjà connu"),
     btn: `<button class="btn small primary" data-associer="${j.id}">C'est ce jeu</button><button class="btn small" data-open="${j.id}">Ouvrir</button>` };
   if (je) return { txt: "Déjà au festival", btn: `<button class="btn small" data-open="${j.id}">Ouvrir</button>` };
-  return { txt: j.ludotheque ? "Dans la ludothèque, pas encore pris pour ce festival" : "Déjà connu (jeu d'éditeur), pas dans ce festival",
+  return { txt: j.ludotheque ? "Dans la ludothèque, pas encore pris pour ce festival" : "Déjà connu, pas dans ce festival",
     btn: `<button class="btn small primary" data-aufestival="${j.id}">Ajouter au festival</button><button class="btn small" data-open="${j.id}">Ouvrir</button>` };
 }
 function ajoutView() {
@@ -346,7 +360,7 @@ function ajoutView() {
     const e = etatLocal(j), img = j.miniature_url || j.image_url;
     return `<div class="row"><div class="bgg-thumb">${img ? `<img src="${esc(img)}" alt="">` : ""}</div>
       <div class="row-main"><b>${esc(j.titre)}${j.annee ? ` <span class="mini">(${j.annee})</span>` : ""}</b>
-        <span class="muted">${j.ludotheque ? "Asso" : "Éditeur" + (j.editeur_id ? " · " + esc(orgNom(j.editeur_id)) : "")} · ${esc(e.txt)}</span></div>
+        <span class="muted">${j.ludotheque ? "Asso" : (j.editeur_id ? esc(orgNom(j.editeur_id)) : "Jeu externe")} · ${esc(e.txt)}</span></div>
       <div class="actions">${e.btn}</div></div>`;
   }).join("")}</div>` : "";
   const bgg = ajout.bgg == null ? "" : (() => {
@@ -379,13 +393,17 @@ function ajoutView() {
         <button class="btn small" id="to-csv">Import CSV (ludothèque)</button></div>
       ${BGG}</div>`;
 }
-// Choix « jeu de l'asso / jeu d'éditeur » (+ « le prendre pour ce festival »), commun à
+// Choix « jeu de l'asso / jeu à obtenir » (+ « le prendre pour ce festival », ou provenance), commun à
 // la recherche et à la saisie à la main. Préfixe = a (ajout) ou m (manuel).
 function origineChoix(p) {
   return `<div class="champ-groupe"><span class="lbl">Ce jeu est…</span><div class="chk-row">
       <span class="chk-inline"><input type="radio" name="${p}-origine" value="asso"${ajout.asso ? " checked" : ""} data-origine> un jeu de l'asso (ludothèque)</span>
-      <span class="chk-inline"><input type="radio" name="${p}-origine" value="editeur"${ajout.asso ? "" : " checked"} data-origine> un jeu d'éditeur, demandé pour ce festival</span></div>
-    ${ajout.asso ? `<span class="chk-inline"><input type="checkbox" id="${p}-prendre"${ajout.prendre ? " checked" : ""} data-prendre> Le prendre pour ce festival</span>` : ""}</div>`;
+      <span class="chk-inline"><input type="radio" name="${p}-origine" value="obtenir"${ajout.asso ? "" : " checked"} data-origine> un jeu à obtenir pour ce festival</span></div>
+    ${ajout.asso ? `<span class="chk-inline"><input type="checkbox" id="${p}-prendre"${ajout.prendre ? " checked" : ""} data-prendre> Le prendre pour ce festival</span>`
+      : `<div class="filters" style="align-items:flex-end">
+          <div class="champ-groupe"><span class="lbl">Comment ?</span><div class="chk-row">${PROVENANCES.map(([k, l]) =>
+            `<span class="chk-inline"><input type="radio" name="${p}-prov" value="${k}"${ajout.prov === k ? " checked" : ""} data-prov> ${({ don: "Don (éditeur ou autre)", achat: "Achat de l'asso", pret: "Prêt (ludothèque, bar à jeux, boutique…)" })[k]}</span>`).join("")}</div></div>
+          <label>Auprès de qui (facultatif)<input id="${p}-detail" data-detail value="${esc(ajout.detail)}" placeholder="${ajout.prov === "achat" ? "ex. boutique Le Dé Normand" : ajout.prov === "pret" ? "ex. ludothèque de Fécamp" : "par défaut : l'éditeur du jeu"}"></label></div>`}</div>`;
 }
 function manuelView() {
   return `<div class="page-head"><div><h1>Saisir un jeu à la main</h1><div class="sub">Sans BGG</div></div>
@@ -394,7 +412,7 @@ function manuelView() {
       ${origineChoix("m")}
       ${f("Titre", `<input data-m="titre" placeholder="Nom du jeu" value="${esc(ajout.q)}">`)}
       <div class="row2">${f("Année", `<input type="number" data-m="annee">`)}${f("Catégorie", catSel(null, "data-m"))}</div>
-      ${ajout.asso ? "" : f("Éditeur", editeurSel(null, "data-m"))}
+      ${f("Éditeur", editeurSel(null, "data-m"))}
       <div class="row2">${f("Joueurs min", `<input type="number" data-m="joueurs_min">`)}${f("Joueurs max", `<input type="number" data-m="joueurs_max">`)}</div>
       <div class="row2">${f("Durée (min)", `<input type="number" data-m="duree_min">`)}${f("Âge min", `<input type="number" data-m="age_min">`)}</div>
       ${f("Image (lien)", `<input data-m="image_url" placeholder="https://…">`)}
@@ -425,7 +443,7 @@ function ficheView() {
   const je = sel.get(j.id), w = canWrite(), ro = w ? "" : " disabled";
   const img = j.image_url || j.miniature_url;
   return `<div class="page-head"><div><h1>${esc(j.titre)}</h1>
-    <div class="sub">${j.ludotheque ? "Jeu de l'asso" : "Jeu d'éditeur" + (j.editeur_id ? " · " + esc(orgNom(j.editeur_id)) : "")} · ${je ? "au festival" : "pas dans ce festival"}</div></div>
+    <div class="sub">${j.ludotheque ? "Jeu de l'asso" : je ? esc(provLbl(je.provenance)) + (source(je, j) ? " · " + esc(source(je, j)) : "") : "Jeu externe"}${j.editeur_id ? " · éditeur " + esc(orgNom(j.editeur_id)) : ""} · ${je ? "au festival" : "pas dans ce festival"}</div></div>
     <div class="head-actions"><button class="btn" id="retour">← Jeux</button>${w ? `<button class="btn primary" id="save">Enregistrer</button>` : ""}</div></div>
     <div class="two">
       <div class="l card"><h2>Le jeu</h2>
@@ -474,9 +492,15 @@ function blocFestival(j, je, ro) {
     + a.apprendre.map((n) => `<div class="anim-row"><span>${esc(n)}</span><span class="pill amber">Veut apprendre</span></div>`).join(""))
     || `<p class="muted">Personne n'a encore répondu pour ce jeu.</p>`;
   const statut = j.ludotheque ? `<div class="champ-groupe"><span class="lbl">Statut</span><span class="pill blue">Jeu de l'asso</span></div>`
-    : f("Statut (demande à l'éditeur)", `<select data-e="statut"${ro}>${STATUTS_EDITEUR.map(([k, l]) => `<option value="${k}"${k === je.statut ? " selected" : ""}>${l}</option>`).join("")}</select>`);
+    : `<div>${f("Provenance", `<select data-e="provenance"${ro}>${PROVENANCES.map(([k, l]) => `<option value="${k}"${k === je.provenance ? " selected" : ""}>${l}</option>`).join("")}</select>`)}
+       ${f("Statut", `<select data-e="statut"${ro}>${statutsDe(je.provenance).map(([k, l]) => `<option value="${k}"${k === je.statut ? " selected" : ""}>${l}</option>`).join("")}</select>`)}</div>`;
+  const aupres = j.ludotheque ? "" : f("Auprès de qui", `<input data-e="provenance_detail" value="${esc(je.provenance_detail || "")}" placeholder="${je.provenance === "don" ? "par défaut : l'éditeur du jeu" : "ludothèque, bar à jeux, boutique…"}"${ro}>`);
+  // Jeu acheté ou donné, reçu : il appartient désormais à l'asso.
+  const garder = !ro && !j.ludotheque && je.statut === "recu" && ["achat", "don"].includes(je.provenance)
+    ? `<p class="mini">Ce jeu appartient maintenant à l'asso ? <button class="btn small" id="garder-ludo">Le garder dans la ludothèque</button></p>` : "";
   return `<div class="card"><h2>Ce festival</h2>
       <div class="row2">${statut}${f("Exemplaires", `<input type="number" min="1" data-e="exemplaires" value="${je.exemplaires ?? 1}"${ro}>`)}</div>
+      ${aupres}${garder}
       <div class="champ-groupe"><span class="lbl">Usages</span><div class="chk-row">${USAGES.map(([k, l]) => `<span class="chk-inline"><input type="checkbox" data-usage="${k}"${(je.usages || []).includes(k) ? " checked" : ""}${ro}> ${l}</span>`).join("")}</div></div>
       <label>Table (plan)<div class="with-link"><select data-e="element_id"${ro}>${tOpts}</select><a class="link" href="#/plan">Voir sur le plan</a></div></label>
       ${f("Notes", `<textarea data-e="notes"${ro}>${esc(je.notes || "")}</textarea>`)}
@@ -521,7 +545,7 @@ async function onClick(e) {
     if (mode === "tri") { await load(); tab = "ludo"; }  // le tri a pu changer la sélection
     mode = "list"; return go();
   }
-  if (t.closest("#ajouter")) { ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: "" }; mode = "ajout"; return go(); }
+  if (t.closest("#ajouter")) { ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "" }; mode = "ajout"; return go(); }
   if (t.closest("#to-manuel")) { mode = "manuel"; return go(); }
   if (t.closest("#to-ajout")) { mode = "ajout"; return go(); }
   if (t.closest("#to-csv") || t.closest("#l-csv")) { csvMsg = ""; mode = "csv"; return go(); }
@@ -536,6 +560,7 @@ async function onClick(e) {
   if (t.closest("#bgg-update")) return majBgg();
   if (t.closest("#lier-bgg")) return lierBgg();
   if (t.closest("#retirer")) return retirerDuFestival(jeux.get(ficheId));
+  if (t.closest("#garder-ludo")) return garderDansLudo(jeux.get(ficheId));
   if (t.closest("#suppr-jeu")) return supprimerJeu(jeux.get(ficheId));
   if (t.closest("#new-ed-go")) return ajouterEditeur(root.querySelector("#new-ed")?.value);
   const b = t.closest("[data-choix],[data-aufestival],[data-bgg],[data-addeditor],[data-associer],[data-mdel],[data-madd],[data-mcopy],[data-open]");
@@ -566,8 +591,14 @@ function onChange(e) {
   const t = e.target;
   if (t.id === "f-origine") { filt.origine = t.value; return go(); }
   if (t.id === "f-usage") { filt.usage = t.value; return go(); }
+  if (t.id === "f-prov") { filt.prov = t.value; return go(); }
   if (t.id === "f-cat") { filt.categorie = t.value; return go(); }
   if (t.id === "f-editeur") { filt.editeur = t.value; return go(); }
+  if (t.matches('[data-e="provenance"]')) {
+    const st = root.querySelector('[data-e="statut"]'), cur = st?.value;
+    if (st) st.innerHTML = statutsDe(t.value).map(([k, l]) => `<option value="${k}"${k === cur ? " selected" : ""}>${l}</option>`).join("");
+    return;
+  }
   if (t.matches("[data-origine]")) {
     ajout.asso = t.value === "asso";
     // Garder ce qui a été tapé dans le formulaire manuel.
@@ -575,6 +606,12 @@ function onChange(e) {
     return go();
   }
   if (t.matches("[data-prendre]")) { ajout.prendre = t.checked; return; }
+  if (t.matches("[data-prov]")) {
+    ajout.prov = t.value;
+    if (mode === "manuel") ajout.q = root.querySelector('[data-m="titre"]')?.value || ajout.q;
+    return go();
+  }
+  if (t.matches("[data-detail]")) { ajout.detail = t.value; return; }
   if (t.id === "csv-file") { const fl = t.files[0]; if (fl) fl.text().then((x) => { const ta = root.querySelector("#csv-text"); if (ta) ta.value = x; }); }
 }
 function onSubmit(e) {
@@ -599,7 +636,7 @@ function scanner(v) {
   if (code.length < 6) { toast("Code-barre trop court."); return; }
   const j = parEan(code);
   if (j) { ficheId = j.id; mode = "fiche"; window.scrollTo(0, 0); go(); if (!sel.has(j.id)) toast(`« ${j.titre} » : pas encore au festival.`, "warn"); return; }
-  if (mode !== "ajout") ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: code };
+  if (mode !== "ajout") ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: code, prov: "don", detail: "" };
   else ajout.ean = code;
   mode = "ajout"; go();
   root.querySelector("#a-q")?.focus();
@@ -662,15 +699,34 @@ async function choisir(jeuId, c) {
   go();
 }
 
-// Ajoute un jeu connu à ce festival : jeu de l'asso → tri « Oui » ; jeu d'éditeur → « Souhaité ».
+// Ajoute un jeu connu à ce festival : jeu de l'asso → tri « Oui » ; sinon jeu à obtenir
+// (provenance choisie à l'ajout, don par défaut), statut « À demander / À acheter ».
 async function ajouterAuFestival(j) {
   if (!j || sel.has(j.id)) return;
   if (j.ludotheque) return choisir(j.id, "oui");
   const { data, error } = await supa.from("jeux_editions")
-    .insert({ jeu_id: j.id, edition_id: store.editionId, statut: "souhaite", usages: ["animation"] }).select().single();
+    .insert({ jeu_id: j.id, edition_id: store.editionId, statut: "souhaite", usages: ["animation"],
+      provenance: mode === "ajout" || mode === "manuel" ? ajout.prov : "don",
+      provenance_detail: mode === "ajout" || mode === "manuel" ? (ajout.detail.trim() || null) : null }).select().single();
   if (error) return toast("Erreur : " + error.message);
   sel.set(j.id, data);
   go();
+}
+// Jeu acheté ou donné, reçu : il entre dans la ludothèque (statut « jeu de l'asso », tri « Oui »).
+async function garderDansLudo(j) {
+  const je = j && sel.get(j.id); if (!je) return;
+  if (!confirm(`« ${j.titre} » entre dans la ludothèque de l'asso ?`)) return;
+  const [r1, r2] = await Promise.all([
+    supa.from("jeux").update({ ludotheque: true }).eq("id", j.id),
+    supa.from("jeux_editions").update({ statut: "deja_asso" }).eq("id", je.id),
+  ]);
+  if (r1.error || r2.error) return toast("Erreur : " + (r1.error || r2.error).message);
+  j.ludotheque = true; je.statut = "deja_asso";
+  const c = (je.usages || []).includes("bar") && !(je.usages || []).includes("animation") ? "bar" : "oui";
+  const { error } = await supa.from("ludotheque_choix").upsert({ edition_id: store.editionId, jeu_id: j.id, choix: c }, { onConflict: "edition_id,jeu_id" });
+  if (!error) choix.set(j.id, c);
+  go();
+  toast("Ajouté à la ludothèque.", "ok");
 }
 async function retirerDuFestival(j) {
   const je = j && sel.get(j.id); if (!je) return;
@@ -851,9 +907,10 @@ async function enregistrer() {
   let ePatch = null;
   if (je) {
     const usages = [...root.querySelectorAll("[data-usage]")].filter((c) => c.checked).map((c) => c.dataset.usage);
-    // Jeu de l'asso : statut « Déjà à l'asso » ; jeu d'éditeur : statut choisi (Souhaité par défaut).
+    // Jeu de l'asso : statut « Déjà à l'asso » ; jeu à obtenir : statut et provenance choisis.
     const st = e("statut")?.value;
     ePatch = { statut: asso ? "deja_asso" : (st && st !== "deja_asso" ? st : "souhaite"),
+      ...(e("provenance") ? { provenance: e("provenance").value, provenance_detail: (e("provenance_detail")?.value || "").trim() || null } : {}),
       exemplaires: numOrNull(e("exemplaires").value) || 1, usages: usages.length ? usages : ["animation"],
       element_id: e("element_id").value || null, notes: e("notes").value || null };
   }
