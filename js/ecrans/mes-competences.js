@@ -22,14 +22,17 @@ export async function render(container) {
   me = m.data;
   const [je, cp, be, c] = await Promise.all([
     supa.from("jeux_editions").select("usages, jeux(id,titre,annee,image_url,miniature_url,joueurs_min,joueurs_max,duree_min,age_min,categorie_id)").eq("edition_id", store.editionId),
-    supa.from("competences").select("benevole_id,jeu_id,categorie_id,niveau"),
-    supa.from("benevoles_editions").select("benevole_id").eq("edition_id", store.editionId),
+    // Compétences de tous les bénévoles de l'édition (sans coordonnées) : pour savoir si un
+    // jeu a déjà un animateur. Les miennes sont relues à part (elles peuvent dire « non »).
+    supa.rpc("animateurs_edition", { p_edition: store.editionId }),
+    supa.from("competences").select("benevole_id,jeu_id,categorie_id,niveau").eq("benevole_id", me.id),
     supa.from("categories_jeux").select("id,nom"),
   ]);
   // Seulement les jeux à animer (pas la tombola) : on ne cherche un animateur que pour eux.
   games = (je.data ?? []).filter((x) => (x.usages || ["animation"]).includes("animation")).map((x) => x.jeux).filter(Boolean).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
-  comps = cp.data ?? [];
-  beneIds = new Set((be.data ?? []).map((x) => x.benevole_id));
+  // Les miennes (y compris « non ») remplacent celles de la liste générale.
+  comps = [...(cp.data ?? []).filter((x) => x.benevole_id !== me.id), ...(be.data ?? [])];
+  beneIds = new Set(comps.map((x) => x.benevole_id));
   cats = c.data ?? [];
   wireOnce();
   draw();

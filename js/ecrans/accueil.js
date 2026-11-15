@@ -13,7 +13,7 @@ const TRANCHES = [["3+", "3 ans +"], ["6+", "6 ans +"], ["8+", "8 ans +"], ["13+
 const JOURS = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
 let root, jours = ["sam", "dim"], jour = "sam", tab = "entrees";
 let ville = "Fécamp", cp = "76400", basket = {}, counts = {}, synced = true, lastGroup = [];
-let parties = [], insc = [], retry = null, dateSamedi = null, voirTerminees = false;
+let parties = [], insc = [], retry = null, dateSamedi = null, voirTerminees = false, refus = "";
 const onOnline = () => { if (store.editionId) refresh(); };
 const onOffline = () => { if (root?.isConnected) draw(); };
 const countsKey = () => `pf_accueil_${store.editionId}_${jour}`;
@@ -84,6 +84,7 @@ function draw() {
     <button data-tab="inscriptions"${tab === "inscriptions" ? ' class="on"' : ""}>Inscriptions aux parties</button></div>`;
   root.innerHTML = `<div class="page-head"><div><h1>Accueil</h1>
       <div class="sub">${navigator.onLine ? (synced ? "Synchronisé" : "Envoi en attente…") : "⚠ Hors ligne — saisies conservées"}</div></div></div>
+    ${refus ? `<p class="sync-warn">⚠ Le serveur refuse les entrées : ${esc(refus)}. Elles restent sur cet appareil ; préviens un responsable.</p>` : ""}
     ${subTabs}${tab === "inscriptions" ? inscTab() : entreesTab()}`;
   wire();
 }
@@ -240,7 +241,16 @@ async function flush() {
   flushing = true;
   try {
     const q = await qAll();
-    for (const e of q) { const { error } = await supa.from("entrees").upsert(e); if (!error) await qDel(e.id); }
+    let err = "";
+    for (const e of q) {
+      // « ignoreDuplicates » : une entrée déjà arrivée (réseau coupé juste après l'envoi) ne
+      // bloque plus la file.
+      const { error } = await supa.from("entrees").upsert(e, { onConflict: "id", ignoreDuplicates: true });
+      if (!error) { await qDel(e.id); continue; }
+      if (/fetch|network|Failed|Load failed/i.test(error.message)) break;  // pas de réseau : on réessaiera
+      err = error.message;  // refus du serveur : on garde l'entrée et on le dit
+    }
+    if (err !== refus) { refus = err; if (root?.isConnected) draw(); }
     const left = (await qAll()).length;
     if (synced !== (left === 0)) { synced = left === 0; if (root?.isConnected) draw(); }
   } catch { /* IndexedDB indisponible */ } finally { flushing = false; }

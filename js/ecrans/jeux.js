@@ -77,8 +77,9 @@ async function load() {
     supa.from("ludotheque_choix").select("jeu_id,choix").eq("edition_id", ed),
     supa.from("categories_jeux").select("id,nom,type,ordre").order("ordre"),
     supa.from("organismes").select("id,nom").order("nom"),
-    supa.from("competences").select("benevole_id, jeu_id, categorie_id, niveau"),
-    supa.from("benevoles_editions").select("benevole:benevoles(id,nom)").eq("edition_id", ed),
+    // Qui anime quoi (noms + compétences, sans coordonnées) : lisible par tout compte actif.
+    supa.rpc("animateurs_edition", { p_edition: ed }),
+    Promise.resolve(null),
     supa.from("elements").select("id, numero, salle_id, salles(nom)").eq("edition_id", ed).eq("kind", "table"),
     supa.from("organisme_editions").select("organisme_id, edition_id").contains("roles", ["editeur"]),
   ]);
@@ -86,9 +87,10 @@ async function load() {
   jeux = new Map((jx.data ?? []).map((j) => [j.id, j]));
   sel = new Map((je.data ?? []).map((r) => [r.jeu_id, r]));
   choix = new Map((ch.data ?? []).map((r) => [r.jeu_id, r.choix]));
-  cats = c.data ?? []; orgs = o.data ?? []; comps = cp.data ?? [];
-  beneIds = new Set();
-  benes = (be.data ?? []).map((x) => x.benevole).filter(Boolean).filter((b) => (beneIds.has(b.id) ? false : beneIds.add(b.id)));
+  cats = c.data ?? []; orgs = o.data ?? [];
+  comps = cp.data ?? [];
+  beneIds = new Set(comps.map((x) => x.benevole_id));
+  benes = [...new Map(comps.map((x) => [x.benevole_id, { id: x.benevole_id, nom: x.nom }])).values()];
   tables = (el.data ?? []).sort((a, b) => (parseInt(a.numero, 10) || 0) - (parseInt(b.numero, 10) || 0));
   edIds = new Set((oed.data ?? []).map((x) => x.organisme_id));
   edIdsIci = new Set((oed.data ?? []).filter((x) => x.edition_id === ed).map((x) => x.organisme_id));
