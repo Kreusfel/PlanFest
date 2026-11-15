@@ -156,23 +156,35 @@ function contactsTab(types, title) {
 // Toutes les structures invitées ou confirmées (écoles + établissements), par heure d'arrivée.
 function derouleTab() {
   const hm = (t) => (t || "").slice(0, 5);
+  const STAT = Object.fromEntries(STATUTS);
+  // Moment de la journée : demi-journée choisie (écoles), sinon heure d'arrivée (avant 13 h =
+  // matin), sinon « à préciser ».
+  const moment = (p) => p.demi_journee || (p.heure_debut ? (hm(p.heure_debut) < "13:00" ? "matin" : "aprem") : "");
   const liste = [...parts.values()].filter((p) => p.statut !== "decline")
     .map((p) => ({ p, c: contacts.find((x) => x.id === p.contact_id) })).filter((x) => x.c)
-    // Ordre : heure d'arrivée, sinon matin (08:00) / après-midi (13:00) pour les écoles.
-    .sort((a, b) => (a.p.heure_debut || ({ matin: "08:00", aprem: "13:00" })[a.p.demi_journee] || "99").localeCompare(b.p.heure_debut || ({ matin: "08:00", aprem: "13:00" })[b.p.demi_journee] || "99") || a.c.nom.localeCompare(b.c.nom, "fr"));
-  const STAT = Object.fromEntries(STATUTS);
-  const rows = liste.map(({ p, c }) => `<tr>
-      <td><b>${p.heure_debut ? `${esc(hm(p.heure_debut))}${p.heure_fin ? "–" + esc(hm(p.heure_fin)) : ""}` : p.demi_journee ? esc(DEMI_LBL[p.demi_journee]) : `<span class="muted">${esc(p.creneau || "heure ?")}</span>`}</b></td>
-      <td>${esc(c.nom)} <span class="muted">${esc(c.type || "")}</span></td>
+    .sort((a, b) => (a.p.heure_debut || "99").localeCompare(b.p.heure_debut || "99") || a.c.nom.localeCompare(b.c.nom, "fr"));
+  const ligne = ({ p, c }) => {
+    const cls = classesDe(p).map((x) => x.nom).filter(Boolean).join(", ");
+    return `<tr>
+      <td><b>${p.heure_debut ? `${esc(hm(p.heure_debut))}${p.heure_fin ? "–" + esc(hm(p.heure_fin)) : ""}` : `<span class="muted">${esc(p.creneau || "—")}</span>`}</b></td>
+      <td>${esc(c.nom)} <span class="muted">${esc(c.type || "")}${cls ? " · " + esc(cls) : ""}</span></td>
       <td>${p.effectif ?? "—"}</td>
-      <td><span class="tag ${p.statut === "invite" ? "warn" : "ok"}">${esc(STAT[p.statut] || p.statut)}</span></td></tr>`).join("")
-    || `<tr><td colspan="4" class="muted">Aucune structure invitée pour l'instant.</td></tr>`;
-  const total = liste.filter(({ p }) => ["confirme", "venu"].includes(p.statut)).reduce((t, { p }) => t + (p.effectif || 0), 0);
+      <td><span class="tag ${p.statut === "invite" ? "warn" : "ok"}">${esc(STAT[p.statut] || p.statut)}</span></td></tr>`;
+  };
+  const bloc = (titre, items) => {
+    const total = items.filter(({ p }) => ["confirme", "venu"].includes(p.statut)).reduce((t, { p }) => t + (p.effectif || 0), 0);
+    return `<div class="card"><div class="ihead"><h3>${esc(titre)}</h3><span class="muted">${plurS(items.length, "structure")} · ${total} personne(s)</span></div>
+      ${items.length ? `<div class="scroll"><table class="data-table"><thead><tr><th>Heure</th><th>Structure</th><th>Effectif</th><th>Statut</th></tr></thead>
+      <tbody>${items.map(ligne).join("")}</tbody></table></div>` : `<p class="muted">Personne pour l'instant.</p>`}</div>`;
+  };
+  const sansMoment = liste.filter((x) => !moment(x.p));
   return `<div class="ihead"><h2 class="sect-title">Déroulé du vendredi</h2></div>
-    <div class="card"><p class="mini">${total} personne(s) confirmée(s). Écoles : matin ou après-midi (onglet Écoles) ; établissements : heures (onglet Établissements).</p>
-    <div class="scroll"><table class="data-table"><thead><tr><th>Heure</th><th>Structure</th><th>Effectif</th><th>Statut</th></tr></thead>
-    <tbody>${rows}</tbody></table></div></div>`;
+    ${bloc("Matin", liste.filter((x) => moment(x.p) === "matin"))}
+    ${bloc("Après-midi", liste.filter((x) => moment(x.p) === "aprem"))}
+    ${sansMoment.length ? bloc("À préciser", sansMoment) : ""}
+    <p class="mini">Écoles : matin ou après-midi (onglet Écoles) ; établissements : heures d'arrivée (onglet Établissements, avant 13 h = matin).</p>`;
 }
+const plurS = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
 /* ---------- Import CSV (établissements) ---------- */
 function csvView() {
