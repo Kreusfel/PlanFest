@@ -14,7 +14,7 @@ const PALETTE = ["#a9c6e8", "#f7b2b2", "#bfe3b4", "#f7d8a0", "#c9b7e8", "#a0d8d8
 const SUB_ROLE = { editeurs: "editeur", partenaires: "partenaire", sponsors: "sponsor" };
 const ROLE_SUB = { editeur: "editeurs", partenaire: "partenaires", sponsor: "sponsors" };
 const ROLE_PLURAL = { editeur: "Éditeurs", partenaire: "Partenaires", sponsor: "Sponsors" };
-const JE_STATUT_LBL = { souhaite: "Souhaité", demande: "Demandé", recu: "Reçu", deja_asso: "Déjà à l'asso" };
+const JE_STATUT_LBL = { souhaite: "À obtenir", demande: "Demandé", recu: "Obtenu", deja_asso: "Jeu de l'asso" };
 const JE_STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso: "blue" };
 const JE_USAGE_LBL = { animation: "Animation", bar: "Bar à jeux", tombola: "Tombola" };
 
@@ -302,7 +302,7 @@ function editeurJeuxBlock(oe) {
     ${canAdd ? `<div class="add-jeu-row" style="display:none">
       <select id="add-jeu"><option value="">— jeu du catalogue —</option>${dispo.map((j) => `<option value="${j.id}">${esc(j.titre)}</option>`).join("")}</select>
       <button class="btn small primary" id="add-jeu-go">Ajouter</button></div>` : ""}
-    <p class="mini">Statuts : souhaité, demandé, reçu. Usages : animation, bar à jeux, tombola. Modifiable dans « Jeux ».</p>
+    <p class="mini">Statuts : à obtenir, demandé, obtenu. Usages : animation, bar à jeux, tombola. Modifiable dans « Jeux ».</p>
     <p class="msg" id="je-msg"></p></div>`;
 }
 

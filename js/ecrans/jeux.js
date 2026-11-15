@@ -21,20 +21,21 @@ import * as swipe from "./selection-swipe.js";
 // (ludothèque, bar à jeux, boutique…). Mêmes statuts en base, libellés selon la provenance.
 const PROVENANCES = [["don", "Don"], ["achat", "Achat"], ["pret", "Prêt"]];
 const provLbl = (k) => (PROVENANCES.find((x) => x[0] === k) || [k, k])[1];
-const STATUTS_PROV = {
-  don: [["souhaite", "À demander"], ["demande", "Demandé"], ["recu", "Reçu"]],
-  pret: [["souhaite", "À demander"], ["demande", "Demandé"], ["recu", "Reçu"]],
-  achat: [["souhaite", "À acheter"], ["demande", "Commandé"], ["recu", "Reçu"]],
-};
-const statutsDe = (prov) => STATUTS_PROV[prov] || STATUTS_PROV.don;
+// Jeu à obtenir : À obtenir → Demandé (à qui) → Obtenu (comment : don, prêt, achat).
+// On ne connaît la provenance qu'une fois le jeu obtenu (migration 051).
+const STATUTS_OBTENIR = [["souhaite", "À obtenir"], ["demande", "Demandé"], ["recu", "Obtenu"]];
 const STATUT_PILL = { souhaite: "grey", demande: "amber", recu: "ok", deja_asso: "blue" };
-const statutLbl = (k, prov = "don") => (k === "deja_asso" ? "Jeu de l'asso" : (statutsDe(prov).find((x) => x[0] === k) || [k, k])[1]);
-// Auprès de qui : texte saisi, sinon l'éditeur pour un don.
+const statutLbl = (k) => (k === "deja_asso" ? "Jeu de l'asso" : (STATUTS_OBTENIR.find((x) => x[0] === k) || [k, k])[1]);
 const estPret = (je) => je && je.provenance === "pret" && !jeux.get(je.jeu_id)?.ludotheque;
 const pretsEdition = () => [...sel.values()].filter(estPret);
 const listePreteurs = () => [...new Set([...preteursPasses, ...pretsEdition().map((je) => (je.provenance_detail || "").trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "fr"));
 const preteursDl = () => `<datalist id="preteurs-dl">${listePreteurs().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>`;
-const source = (je, j) => je.provenance_detail || (je.provenance === "don" && j.editeur_id ? orgNom(j.editeur_id) : "");
+const source = (je) => je.provenance_detail || "";
+// Libellé court d'un jeu à obtenir : « À obtenir », « Demandé · Asmodee », « Prêt · Ludothèque · Obtenu ».
+const etiquetteObtenir = (je) => je.statut === "recu"
+  ? [je.provenance ? provLbl(je.provenance) : "", source(je), "Obtenu"].filter(Boolean).join(" · ")
+  : je.statut === "demande" ? ["Demandé", source(je)].filter(Boolean).join(" · ") : "À obtenir";
+const aObtenirFestival = () => [...sel.values()].filter((je) => !jeux.get(je.jeu_id)?.ludotheque && je.statut !== "recu");
 const USAGES = [["animation", "Animation"], ["bar", "Bar à jeux"], ["tombola", "Tombola"]];
 const CHOIX = [["oui", "Oui", "ok"], ["bar", "Bar", "amber"], ["non", "Non", "grey"]];
 const BGG = `<p class="mini bgg-foot">Données et images : <a href="https://boardgamegeek.com" target="_blank" rel="noopener">Powered by BGG</a></p>`;
@@ -94,8 +95,8 @@ const meta = (j) => [(j.joueurs_min || j.joueurs_max) ? `${j.joueurs_min || "?"}
 export async function render(container, sub = "") {
   root = container;
   mode = "list"; ficheId = null;
-  tab = ["ludo", "malles", "prets"].includes(sub) ? sub : "festival";
-  filt.editeur = sub && !["ludo", "malles", "prets", "festival"].includes(sub) ? sub : "";
+  tab = ["ludo", "malles", "prets", "obtenir"].includes(sub) ? sub : "festival";
+  filt.editeur = sub && !["ludo", "malles", "prets", "obtenir", "festival"].includes(sub) ? sub : "";
   if (!store.editionId) {
     root.innerHTML = `<div class="page-head"><div><h1>Jeux</h1><div class="sub">Aucune édition sélectionnée</div></div></div>
       <div class="card"><p><a class="btn primary" href="#/editions">Choisir une édition</a></p></div>`;
@@ -115,7 +116,7 @@ async function load() {
     supa.from("jeux_editions").select("*").eq("edition_id", ed),
     supa.from("ludotheque_choix").select("jeu_id,choix").eq("edition_id", ed),
     supa.from("categories_jeux").select("id,nom,type,ordre").order("ordre"),
-    supa.from("organismes").select("id,nom").order("nom"),
+    supa.from("organismes").select("id,nom,contact_email").order("nom"),
     // Qui anime quoi (noms + compétences, sans coordonnées) : lisible par tout compte actif.
     supa.rpc("animateurs_edition", { p_edition: ed }),
     Promise.resolve(null),
@@ -222,10 +223,11 @@ function entete() {
     <div class="utabs">
       <button data-tab="festival"${tab === "festival" ? ' class="on"' : ""}>Festival</button>
       <button data-tab="ludo"${tab === "ludo" ? ' class="on"' : ""}>Ludothèque de l'asso</button>
+      <button data-tab="obtenir"${tab === "obtenir" ? ' class="on"' : ""}>À obtenir${aObtenirFestival().length + aObtenir().length ? ` (${aObtenirFestival().length + aObtenir().length})` : ""}</button>
       <button data-tab="malles"${tab === "malles" ? ' class="on"' : ""}>Malles des écoles</button>
       <button data-tab="prets"${tab === "prets" ? ' class="on"' : ""}>Prêts${pretsEdition().length ? ` (${pretsEdition().filter((je) => !je.rendu).length} à rendre)` : ""}</button></div>`;
 }
-function listView() { return entete() + (tab === "ludo" ? ludoView() : tab === "malles" ? mallesView() : tab === "prets" ? pretsView() : festivalView()); }
+function listView() { return entete() + (tab === "ludo" ? ludoView() : tab === "malles" ? mallesView() : tab === "prets" ? pretsView() : tab === "obtenir" ? obtenirView() : festivalView()); }
 
 /* ---------- onglet Festival ---------- */
 function festivalFiltres() {
@@ -235,7 +237,7 @@ function festivalFiltres() {
     if (q && !comparable(j.titre).includes(q)) return false;
     if (filt.origine === "asso" && !j.ludotheque) return false;
     if (filt.origine === "obtenir" && j.ludotheque) return false;
-    if (filt.prov && (j.ludotheque || je.provenance !== filt.prov)) return false;
+    if (filt.prov && (j.ludotheque || (["souhaite", "demande"].includes(filt.prov) ? je.statut !== filt.prov : (je.statut !== "recu" || je.provenance !== filt.prov)))) return false;
     if (filt.usage && !(je.usages || []).includes(filt.usage)) return false;
     if (filt.categorie && j.categorie_id !== filt.categorie) return false;
     if (filt.editeur && j.editeur_id !== filt.editeur) return false;
@@ -247,7 +249,7 @@ function carte(je) {
   const j = jeux.get(je.jeu_id), nbAnim = animFor(j).anime.length;
   const img = j.miniature_url || j.image_url;
   const origine = j.ludotheque ? `<span class="pill blue">Asso</span>`
-    : `<span class="pill ${STATUT_PILL[je.statut] || "grey"}">${esc([provLbl(je.provenance), source(je, j), statutLbl(je.statut, je.provenance)].filter(Boolean).join(" · "))}</span>`;
+    : `<span class="pill ${STATUT_PILL[je.statut] || "grey"}">${esc(etiquetteObtenir(je))}</span>`;
   const usages = (je.usages || []).map((u) => `<span class="pill grey">${esc(usageLbl(u))}</span>`).join(" ");
   const tbl = je.element_id ? esc(tableLabel(je.element_id) || "Table ?") : "Non placé";
   return `<div class="jeu-card" data-open="${j.id}">
@@ -270,7 +272,7 @@ function festivalView() {
     <div class="jeux-filters">
       <input id="f-q" placeholder="Rechercher un titre…" value="${esc(filt.q)}" aria-label="Rechercher un titre">
       <select id="f-origine" aria-label="Origine">${opt("", filt.origine, "Tous les jeux")}${opt("asso", filt.origine, "Jeux de l'asso")}${opt("obtenir", filt.origine, "Jeux à obtenir")}</select>
-      <select id="f-prov" aria-label="Provenance">${opt("", filt.prov, "Toutes provenances")}${PROVENANCES.map(([k, l]) => opt(k, filt.prov, l)).join("")}</select>
+      <select id="f-prov" aria-label="Avancement">${opt("", filt.prov, "Tout avancement")}${opt("souhaite", filt.prov, "À obtenir")}${opt("demande", filt.prov, "Demandés")}${PROVENANCES.map(([k, l]) => opt(k, filt.prov, "Obtenus : " + l.toLowerCase())).join("")}</select>
       <select id="f-usage" aria-label="Usage">${opt("", filt.usage, "Tous usages")}${USAGES.map(([k, l]) => opt(k, filt.usage, l)).join("")}</select>
       <select id="f-cat" aria-label="Catégorie">${opt("", filt.categorie, "Toutes catégories")}${cats.map((c) => opt(c.id, filt.categorie, c.nom)).join("")}</select>
       <select id="f-editeur" aria-label="Éditeur">${opt("", filt.editeur, "Tous éditeurs")}${eIds.map((id) => opt(id, filt.editeur, orgNom(id))).join("")}</select>
@@ -341,12 +343,8 @@ function mallesView() {
         <td style="text-align:right">${w ? `<button class="btn small danger" data-mdel="${m.id}">Retirer</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`;
   }).join("") || `<div class="card"><p class="muted">Aucun jeu en malle pour cette édition.</p></div>`;
   const ao = aObtenir();
-  const obtenir = ao.length ? `<div class="card"><div class="ihead"><h3>À obtenir</h3><span class="tag bad">${ao.length}</span>
-      <button class="btn small" id="copier-obtenir">Copier la liste</button></div>
-    <p class="mini">Jeux dont il manque des exemplaires : il en faut un par malle (prêtées en même temps), ou autant qu'au festival si c'est plus (les malles sont rendues le vendredi). Achète-les, demande-les en don, ou augmente le nombre d'exemplaires sur leur fiche s'il était faux.</p>
-    <div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Manque</th><th>Possédés</th><th>Utilisation</th></tr></thead><tbody>
-    ${ao.map((j) => `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td><td><span class="tag bad">${manque(j)}</span></td>
-      <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></div>` : "";
+  const obtenir = ao.length ? `<div class="card"><p class="sync-warn">${plur(ao.length, "jeu manque", "jeux manquent")} pour les malles :
+      voir l'onglet <button class="link" data-tab="obtenir">À obtenir</button>.</p></div>` : "";
   return `<p class="mini" style="margin:8px 2px">${plur(malles.length, "jeu", "jeux")} en malle · ${plur(ecoles.length, "école retenue", "écoles retenues")} (<a href="#/intergeneration">Intergénérationnel → Écoles</a>).</p>${sansEcole}${obtenir}${ajoutForm}${groupes}`;
 }
 
@@ -382,6 +380,50 @@ function pretsView() {
         <button class="btn small" data-bon="${esc(k)}">Bon de restitution (PDF)</button>
         ${w && rendus < g.lignes.length ? `<button class="btn small primary" data-toutrendu="${esc(k)}">Tout rendu</button>` : ""}</div></div>`;
   }).join("");
+}
+
+/* ---------- onglet À obtenir ---------- */
+// Liste de travail : jeux du festival qu'on n'a pas (à demander aux éditeurs, puis ailleurs),
+// demandes en cours (obtenu → comment ; refusé → chercher ailleurs), manques des malles.
+function obtenirView() {
+  const w = canWrite(), afaire = aObtenirFestival();
+  const aDemander = afaire.filter((je) => je.statut === "souhaite");
+  const enCours = afaire.filter((je) => je.statut === "demande");
+  // À demander : par éditeur (sans éditeur à part).
+  const parEd = new Map();
+  // Un jeu déjà refusé par son éditeur va dans « À chercher ailleurs ».
+  const groupeDe = (je) => { const ed = jeux.get(je.jeu_id).editeur_id; return ed && !(je.notes || "").includes(`Refusé par ${orgNom(ed)}`) ? ed : ""; };
+  aDemander.forEach((je) => { const ed = groupeDe(je); if (!parEd.has(ed)) parEd.set(ed, []); parEd.get(ed).push(je); });
+  const groupes = [...parEd.entries()].sort((a, b) => (a[0] ? orgNom(a[0]) : "zzz").localeCompare(b[0] ? orgNom(b[0]) : "zzz", "fr")).map(([ed, liste]) => {
+    const org = orgs.find((o) => o.id === ed), titres = liste.map((je) => jeux.get(je.jeu_id).titre).sort((a, b) => a.localeCompare(b, "fr"));
+    return `<div class="card"><div class="ihead"><h3>${ed ? esc(orgNom(ed)) : "À chercher ailleurs"}</h3><span class="muted">${plur(liste.length, "jeu", "jeux")}</span></div>
+      ${org?.contact_email ? `<p class="mini">Contact : <a href="mailto:${esc(org.contact_email)}">${esc(org.contact_email)}</a></p>` : ed ? `<p class="mini">Pas d'e-mail sur la fiche de l'éditeur.</p>` : `<p class="mini">À demander à la ludothèque, à une boutique partenaire, ou à acheter.</p>`}
+      <ul class="reg-list">${liste.map((je) => `<li class="clk" data-open="${je.jeu_id}">${esc(jeux.get(je.jeu_id).titre)}${je.notes ? ` <span class="muted">— ${esc(je.notes.split("\n").slice(-1)[0])}</span>` : ""}</li>`).join("")}</ul>
+      <div class="head-actions" style="justify-content:flex-start">
+        <button class="btn small" data-copietitres="${esc(titres.join("\n"))}">Copier la liste</button>
+        ${w ? `<button class="btn small primary" data-demande="${esc(ed || "?")}">${ed ? "Demandé à l'éditeur" : "Marquer demandé…"}</button>` : ""}</div></div>`;
+  }).join("");
+  const lignesCours = enCours.sort((a, b) => (a.provenance_detail || "").localeCompare(b.provenance_detail || "", "fr")).map((je) => {
+    const j = jeux.get(je.jeu_id);
+    return `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td>
+      <td class="muted">${esc(je.provenance_detail || "—")}</td>
+      <td>${w ? `<div class="chk-row"><select data-obtenu="${je.id}" aria-label="Obtenu comment"><option value="">Obtenu ?</option>${PROVENANCES.map(([k, l]) => `<option value="${k}">par ${l.toLowerCase()}</option>`).join("")}</select>
+        <button class="btn small" data-refus="${je.id}">Refusé</button></div>` : ""}</td></tr>`;
+  }).join("");
+  const ao = aObtenir();
+  const malles = ao.length ? `<div class="card"><div class="ihead"><h3>Pour les malles des écoles</h3><span class="tag bad">${ao.length}</span>
+      <button class="btn small" id="copier-obtenir">Copier la liste</button></div>
+    <div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Manque</th><th>Possédés</th><th>Utilisation</th></tr></thead><tbody>
+    ${ao.map((j) => `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td><td><span class="tag bad">${manque(j)}</span></td>
+      <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></div>` : "";
+  if (!afaire.length && !ao.length) return `<div class="card"><p class="muted">Rien à obtenir : tous les jeux du festival sont là. 🎉</p></div>`;
+  return `<h2 class="sect-title">À demander <span class="muted">${aDemander.length}</span></h2>
+    ${groupes || `<div class="card"><p class="muted">Rien à demander.</p></div>`}
+    <h2 class="sect-title">Demandes en cours <span class="muted">${enCours.length}</span></h2>
+    ${enCours.length ? `<div class="card"><div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Demandé à</th><th></th></tr></thead><tbody>${lignesCours}</tbody></table></div>
+      <p class="mini">Obtenu : choisis comment (pour un prêt, le prêteur sera celui à qui tu l'as demandé). Refusé : le jeu revient dans « À demander », avec une note.</p></div>`
+      : `<div class="card"><p class="muted">Aucune demande en cours.</p></div>`}
+    ${malles}`;
 }
 
 function triView() {
@@ -453,10 +495,7 @@ function origineChoix(p) {
       <span class="chk-inline"><input type="radio" name="${p}-origine" value="asso"${ajout.asso ? " checked" : ""} data-origine> un jeu de l'asso (ludothèque)</span>
       <span class="chk-inline"><input type="radio" name="${p}-origine" value="obtenir"${ajout.asso ? "" : " checked"} data-origine> un jeu à obtenir pour ce festival</span></div>
     ${ajout.asso ? `<span class="chk-inline"><input type="checkbox" id="${p}-prendre"${ajout.prendre ? " checked" : ""} data-prendre> Le prendre pour ce festival</span>`
-      : `<div class="filters" style="align-items:flex-end">
-          <div class="champ-groupe"><span class="lbl">Comment ?</span><div class="chk-row">${PROVENANCES.map(([k, l]) =>
-            `<span class="chk-inline"><input type="radio" name="${p}-prov" value="${k}"${ajout.prov === k ? " checked" : ""} data-prov> ${({ don: "Don (éditeur ou autre)", achat: "Achat de l'asso", pret: "Prêt (ludothèque, bar à jeux, boutique…)" })[k]}</span>`).join("")}</div></div>
-          <label>Auprès de qui${ajout.prov === "pret" ? " (obligatoire : sert à la restitution)" : " (facultatif)"}<input id="${p}-detail" data-detail list="preteurs-dl" value="${esc(ajout.detail)}" placeholder="${ajout.prov === "achat" ? "ex. boutique Le Dé Normand" : ajout.prov === "pret" ? "ex. ludothèque de Fécamp" : "par défaut : l'éditeur du jeu"}"></label>${preteursDl()}</div>`}</div>`;
+      : `<p class="mini">Il ira dans l'onglet « À obtenir » : on le demandera à l'éditeur, puis à la ludothèque ou à une boutique, sinon on l'achètera.</p>`}</div>`;
 }
 function manuelView() {
   return `<div class="page-head"><div><h1>Saisir un jeu à la main</h1><div class="sub">Sans BGG</div></div>
@@ -548,10 +587,13 @@ function blocFestival(j, je, ro) {
     + a.apprendre.map((n) => `<div class="anim-row"><span>${esc(n)}</span><span class="pill amber">Veut apprendre</span></div>`).join(""))
     || `<p class="muted">Personne n'a encore répondu pour ce jeu.</p>`;
   const statut = j.ludotheque ? `<div class="champ-groupe"><span class="lbl">Statut</span><span class="pill blue">Jeu de l'asso</span></div>`
-    : `<div>${f("Provenance", `<select data-e="provenance"${ro}>${PROVENANCES.map(([k, l]) => `<option value="${k}"${k === je.provenance ? " selected" : ""}>${l}</option>`).join("")}</select>`)}
-       ${f("Statut", `<select data-e="statut"${ro}>${statutsDe(je.provenance).map(([k, l]) => `<option value="${k}"${k === je.statut ? " selected" : ""}>${l}</option>`).join("")}</select>`)}</div>`;
-  const aupres = j.ludotheque ? "" : f("Auprès de qui", `<input data-e="provenance_detail" list="preteurs-dl" value="${esc(je.provenance_detail || "")}" placeholder="${je.provenance === "don" ? "par défaut : l'éditeur du jeu" : "ludothèque, bar à jeux, boutique…"}"${ro}>`) + preteursDl()
-    + (je.provenance === "pret" ? `<span class="chk-inline"><input type="checkbox" data-e="rendu"${je.rendu ? " checked" : ""}${ro}> Rendu au prêteur${je.rendu_le ? ` (le ${esc(je.rendu_le)})` : ""}</span>` : "");
+    : f("Statut", `<select data-e="statut"${ro}>${STATUTS_OBTENIR.map(([k, l]) => `<option value="${k}"${k === je.statut ? " selected" : ""}>${l}</option>`).join("")}</select>`);
+  const aupres = j.ludotheque ? "" : `<div class="row2">
+      ${f(je.statut === "recu" ? "Obtenu auprès de" : "Demandé à", `<input data-e="provenance_detail" list="preteurs-dl" value="${esc(je.provenance_detail || "")}" placeholder="éditeur, ludothèque, boutique…"${ro}>`)}
+      ${f("Obtenu comment", `<select data-e="provenance"${ro}><option value="">— pas encore —</option>${PROVENANCES.map(([k, l]) => `<option value="${k}"${k === je.provenance ? " selected" : ""}>${l}</option>`).join("")}</select>`)}
+    </div>${preteursDl()}
+    ${!ro && je.statut === "demande" ? `<p class="mini">Réponse négative ? <button class="btn small" id="refuse">Refusé : chercher ailleurs</button></p>` : ""}
+    ${je.provenance === "pret" ? `<span class="chk-inline"><input type="checkbox" data-e="rendu"${je.rendu ? " checked" : ""}${ro}> Rendu au prêteur${je.rendu_le ? ` (le ${esc(je.rendu_le)})` : ""}</span>` : ""}`;
   // Jeu acheté ou donné, reçu : il appartient désormais à l'asso.
   const garder = !ro && !j.ludotheque && je.statut === "recu" && ["achat", "don"].includes(je.provenance)
     ? `<p class="mini">Ce jeu appartient maintenant à l'asso ? <button class="btn small" id="garder-ludo">Le garder dans la ludothèque</button></p>` : "";
@@ -617,10 +659,11 @@ async function onClick(e) {
   if (t.closest("#bgg-update")) return majBgg();
   if (t.closest("#lier-bgg")) return lierBgg();
   if (t.closest("#retirer")) return retirerDuFestival(jeux.get(ficheId));
+  if (t.closest("#refuse")) { const je = sel.get(ficheId); if (je) return refuser(je.id); }
   if (t.closest("#garder-ludo")) return garderDansLudo(jeux.get(ficheId));
   if (t.closest("#suppr-jeu")) return supprimerJeu(jeux.get(ficheId));
   if (t.closest("#new-ed-go")) return ajouterEditeur(root.querySelector("#new-ed")?.value);
-  const b = t.closest("[data-choix],[data-aufestival],[data-bgg],[data-addeditor],[data-associer],[data-mdel],[data-madd],[data-mcopy],[data-bon],[data-toutrendu],[data-open]");
+  const b = t.closest("[data-choix],[data-aufestival],[data-bgg],[data-addeditor],[data-associer],[data-mdel],[data-madd],[data-mcopy],[data-bon],[data-toutrendu],[data-demande],[data-refus],[data-copietitres],[data-tab],[data-open]");
   if (!b) return;
   if (b.dataset.choix) { const [id, c] = b.dataset.choix.split("|"); return choisir(id, c); }
   if (b.dataset.aufestival) {
@@ -632,6 +675,9 @@ async function onClick(e) {
   if (b.dataset.addeditor) return ajouterEditeur(b.dataset.addeditor);
   if (b.dataset.mdel) return retirerMalle(b.dataset.mdel);
   if (b.dataset.mcopy) return copierMalle(b.dataset.mcopy);
+  if (b.dataset.demande) return marquerDemande(b.dataset.demande);
+  if (b.dataset.refus) return refuser(b.dataset.refus);
+  if (b.dataset.copietitres != null) { try { await navigator.clipboard.writeText(b.dataset.copietitres); toast("Liste copiée.", "ok"); } catch { prompt("Copie cette liste :", b.dataset.copietitres); } return; }
   if (b.dataset.bon || b.dataset.toutrendu) {
     const g = new Map(groupesPrets()).get(b.dataset.bon || b.dataset.toutrendu); if (!g) return;
     if (b.dataset.toutrendu) return marquerRendu(g.lignes.filter((je) => !je.rendu).map((je) => je.id), true);
@@ -663,11 +709,8 @@ function onChange(e) {
   if (t.id === "f-prov") { filt.prov = t.value; return go(); }
   if (t.id === "f-cat") { filt.categorie = t.value; return go(); }
   if (t.id === "f-editeur") { filt.editeur = t.value; return go(); }
-  if (t.matches('[data-e="provenance"]')) {
-    const st = root.querySelector('[data-e="statut"]'), cur = st?.value;
-    if (st) st.innerHTML = statutsDe(t.value).map(([k, l]) => `<option value="${k}"${k === cur ? " selected" : ""}>${l}</option>`).join("");
-    return;
-  }
+  // Choisir « comment » revient à dire que le jeu est obtenu.
+  if (t.matches('[data-e="provenance"]')) { const st = root.querySelector('[data-e="statut"]'); if (st && t.value) st.value = "recu"; return; }
   if (t.matches("[data-origine]")) {
     ajout.asso = t.value === "asso";
     // Garder ce qui a été tapé dans le formulaire manuel.
@@ -682,6 +725,7 @@ function onChange(e) {
   }
   if (t.matches("[data-detail]")) { ajout.detail = t.value; return; }
   if (t.matches("[data-rendu]")) return marquerRendu([t.dataset.rendu], t.checked);
+  if (t.matches("[data-obtenu]") && t.value) return obtenu(t.dataset.obtenu, t.value);
   if (t.id === "csv-file") { const fl = t.files[0]; if (fl) fl.text().then((x) => { const ta = root.querySelector("#csv-text"); if (ta) ta.value = x; }); }
 }
 function onSubmit(e) {
@@ -723,14 +767,39 @@ async function memoriserEan(j) {
 
 /* ---------- actions ---------- */
 // Un prêt doit dire auprès de qui (restitution). Vrai si l'ajout peut continuer.
-function provenanceOk() {
-  if (ajout.asso || ajout.prov !== "pret") return true;
-  const champ = root.querySelector("[data-detail]");
-  if (champ) ajout.detail = champ.value;
-  if (ajout.detail.trim()) return true;
-  toast("Pour un prêt, indique auprès de qui (il faudra rendre le jeu).");
-  champ?.focus();
-  return false;
+// (Plus de provenance à l'ajout : elle se choisit quand le jeu est obtenu.)
+function provenanceOk() { return true; }
+// « Demandé à l'éditeur » : tous les jeux à demander de cet éditeur passent en « Demandé ».
+async function marquerDemande(ed) {
+  const ed2 = (je) => { const e = jeux.get(je.jeu_id).editeur_id; return e && !(je.notes || "").includes(`Refusé par ${orgNom(e)}`) ? e : "?"; };
+  const liste = aObtenirFestival().filter((je) => je.statut === "souhaite" && ed2(je) === ed);
+  let aQui = ed !== "?" ? orgNom(ed) : (prompt("Demandé à qui ? (ludothèque, boutique…)") || "").trim();
+  if (!aQui || !liste.length) return;
+  const { error } = await supa.from("jeux_editions").update({ statut: "demande", provenance_detail: aQui }).in("id", liste.map((je) => je.id));
+  if (error) return toast("Erreur : " + error.message);
+  liste.forEach((je) => { je.statut = "demande"; je.provenance_detail = aQui; });
+  go();
+  toast(`${plur(liste.length, "jeu demandé", "jeux demandés")} à ${aQui}.`, "ok");
+}
+// Obtenu (don, prêt ou achat) : le prêteur est celui à qui on l'a demandé.
+async function obtenu(id, prov) {
+  const je = [...sel.values()].find((x) => x.id === id); if (!je) return;
+  if (prov === "pret" && !je.provenance_detail) { toast("Pour un prêt, indique d'abord à qui tu l'as demandé (fiche du jeu)."); return go(); }
+  const { error } = await supa.from("jeux_editions").update({ statut: "recu", provenance: prov }).eq("id", id);
+  if (error) return toast("Erreur : " + error.message);
+  je.statut = "recu"; je.provenance = prov;
+  go();
+  toast(`« ${jeux.get(je.jeu_id).titre} » obtenu (${provLbl(prov).toLowerCase()}).`, "ok");
+}
+// Refusé : retour « À obtenir », avec une note datée pour se souvenir à qui on l'a déjà demandé.
+async function refuser(id) {
+  const je = [...sel.values()].find((x) => x.id === id); if (!je) return;
+  const note = [je.notes, `Refusé par ${je.provenance_detail || "?"} le ${aujourdhui()}`].filter(Boolean).join("\n");
+  const { error } = await supa.from("jeux_editions").update({ statut: "souhaite", provenance: null, provenance_detail: null, notes: note }).eq("id", id);
+  if (error) return toast("Erreur : " + error.message);
+  Object.assign(je, { statut: "souhaite", provenance: null, provenance_detail: null, notes: note });
+  go();
+  toast("Noté : à chercher ailleurs (ludothèque, boutique, achat).", "ok");
 }
 async function marquerRendu(ids, rendu) {
   const patch = { rendu, rendu_le: rendu ? aujourdhui() : null };
@@ -807,14 +876,13 @@ async function choisir(jeuId, c) {
 }
 
 // Ajoute un jeu connu à ce festival : jeu de l'asso → tri « Oui » ; sinon jeu à obtenir
-// (provenance choisie à l'ajout, don par défaut), statut « À demander / À acheter ».
+// statut « À obtenir », sans provenance (connue seulement une fois obtenu).
 async function ajouterAuFestival(j) {
   if (!j || sel.has(j.id)) return;
   if (j.ludotheque) return choisir(j.id, "oui");
   const { data, error } = await supa.from("jeux_editions")
     .insert({ jeu_id: j.id, edition_id: store.editionId, statut: "souhaite", usages: ["animation"],
-      provenance: mode === "ajout" || mode === "manuel" ? ajout.prov : "don",
-      provenance_detail: mode === "ajout" || mode === "manuel" ? (ajout.detail.trim() || null) : null }).select().single();
+      provenance: null, provenance_detail: null }).select().single();
   if (error) return toast("Erreur : " + error.message);
   sel.set(j.id, data);
   go();
@@ -1025,7 +1093,12 @@ async function enregistrer() {
       exemplaires: numOrNull(e("exemplaires").value) || 1, usages: usages.length ? usages : ["animation"],
       element_id: e("element_id").value || null, notes: e("notes").value || null };
   }
-  if (ePatch?.provenance === "pret" && !asso && !ePatch.provenance_detail) return dire("Pour un prêt, indique auprès de qui (il faudra rendre le jeu).");
+  if (ePatch && !asso) {
+    if (ePatch.provenance === "") ePatch.provenance = null;
+    if (ePatch.statut === "recu" && !ePatch.provenance) return dire("Jeu obtenu : indique comment (don, prêt ou achat).");
+    if (ePatch.statut !== "recu" && ePatch.provenance) ePatch.statut = "recu";
+    if (ePatch.provenance === "pret" && !ePatch.provenance_detail) return dire("Pour un prêt, indique auprès de qui (il faudra rendre le jeu).");
+  }
   const [r1, r2] = await Promise.all([
     supa.from("jeux").update(jPatch).eq("id", j.id),
     je ? supa.from("jeux_editions").update(ePatch).eq("id", je.id) : Promise.resolve({ error: null }),
