@@ -1,5 +1,6 @@
 // Écran #/intergeneration — pôle Intergénérationnel (journée du vendredi).
-//  - Écoles : écoles choisies pour l'event (participation vendredi + effectif).
+//  - Écoles : les écoles qui VIENNENT au festival (choisies dans le carnet de Communication,
+//    qui lui sert aux flyers) : matin ou après-midi, classes et nombre d'élèves.
 //  - Établissements : EHPAD / handicap / autres invités le vendredi.
 //  - Déroulé du vendredi. Les malles des écoles se gèrent dans Jeux → Malles.
 import { supa } from "../supabase.js";
@@ -36,7 +37,7 @@ function draw() {
   if (mode === "csv") body = csvView();
   else if (tab === "deroule") body = derouleTab();
   else if (tab === "etab") body = contactsTab(ETAB_TYPES, "Établissements invités le vendredi");
-  else body = contactsTab(["École"], "Écoles choisies pour l'event");
+  else body = ecolesTab();
   root.innerHTML = `<div class="page-head"><div><h1>Intergénérationnel</h1>
       <div class="sub">Journée du vendredi</div></div>
       <div class="head-actions"><a class="btn" href="#/jeux/malles">Malles des écoles →</a></div></div>
@@ -44,7 +45,65 @@ function draw() {
   wire();
 }
 
-/* ---------- Écoles & Établissements (contacts + participation vendredi) ---------- */
+/* ---------- Écoles qui viennent au festival ---------- */
+const DEMI_LBL = { matin: "Matin", aprem: "Après-midi" };
+const classesDe = (p) => (Array.isArray(p?.classes) ? p.classes : []);
+const totalEleves = (p) => classesDe(p).reduce((t, c) => t + (parseInt(c.eleves, 10) || 0), 0);
+function ecolesTab() {
+  const w = canWrite(), ro = w ? "" : " disabled";
+  const carnet = contacts.filter((c) => c.type === "École");
+  const retenues = carnet.filter((c) => parts.has(c.id) && parts.get(c.id).statut !== "decline");
+  const libres = carnet.filter((c) => !parts.has(c.id));
+  const n = (d) => retenues.filter((c) => parts.get(c.id).demi_journee === d).length;
+  const eleves = retenues.reduce((t, c) => t + totalEleves(parts.get(c.id)), 0);
+  const kpis = `<div class="grid g4">
+    <div class="kpi"><span class="v">${retenues.length}</span>Écoles qui viennent</div>
+    <div class="kpi"><span class="v">${n("matin")}</span>Le matin</div>
+    <div class="kpi"><span class="v">${n("aprem")}</span>L'après-midi</div>
+    <div class="kpi"><span class="v">${eleves}</span>Élèves</div></div>`;
+  const ajout = w ? `<div class="card"><div class="ihead"><h3>Ajouter une école qui vient</h3></div>
+    <div class="filters" style="align-items:flex-end">
+      <label>École du carnet<select id="e-ecole"><option value="">— choisir —</option>${libres.map((c) => `<option value="${c.id}">${esc(c.nom)}${c.commune && c.commune !== c.nom ? ` (${esc(c.commune)})` : ""}</option>`).join("")}</select></label>
+      <button class="btn primary" id="e-retenir">Ajouter</button></div>
+    <details class="pub-editor"><summary>École absente du carnet ?</summary>
+      <div class="filters" style="align-items:flex-end">
+        <label>Nom<input id="e-nom" placeholder="École…"></label>
+        <label>Commune<input id="e-commune"></label>
+        <button class="btn" id="e-creer">Ajouter au carnet et à la liste</button></div>
+      <p class="mini">Le carnet (écran Communication) sert à la diffusion des flyers ; ici, seules les écoles qui viennent au festival.</p></details>
+    <p class="msg" id="d-msg"></p></div>` : "";
+  const cartes = retenues.map((c) => {
+    const p = parts.get(c.id), cls = classesDe(p);
+    const lignes = cls.map((cl, i) => `<tr>
+        <td><input data-cl="${c.id}|${i}|nom" value="${esc(cl.nom || "")}" placeholder="ex. CM1" aria-label="Classe" style="margin:0;min-width:110px"${ro}></td>
+        <td><input type="number" min="0" data-cl="${c.id}|${i}|eleves" value="${cl.eleves ?? ""}" aria-label="Nombre d'élèves" style="margin:0;width:90px"${ro}></td>
+        <td style="text-align:right">${w ? `<button class="btn small danger" data-cldel="${c.id}|${i}" aria-label="Retirer la classe">×</button>` : ""}</td></tr>`).join("")
+      || `<tr><td colspan="3" class="muted">Aucune classe saisie.</td></tr>`;
+    return `<div class="card"><div class="ihead"><h3>${esc(c.nom)}${c.commune && c.commune !== c.nom ? ` <span class="muted">${esc(c.commune)}</span>` : ""}</h3>
+        <span class="muted">${totalEleves(p)} élève(s)</span></div>
+      <div class="filters" style="align-items:flex-end">
+        <label>Vient<select data-edemi="${c.id}"${ro}><option value="">— à préciser —</option>${Object.entries(DEMI_LBL).map(([k, l]) => `<option value="${k}"${p.demi_journee === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        ${w ? `<button class="btn small danger" data-eretirer="${c.id}">Ne vient plus</button>` : ""}</div>
+      <div class="scroll"><table class="data-table"><thead><tr><th>Classe</th><th>Élèves</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>
+      ${w ? `<button class="btn small" data-cladd="${c.id}">+ Ajouter une classe</button>` : ""}</div>`;
+  }).join("") || `<div class="card"><p class="muted">Aucune école pour l'instant.</p></div>`;
+  return `<div class="ihead"><h2 class="sect-title">Écoles qui viennent au festival</h2></div>${kpis}${ajout}${cartes}
+    <p class="mini">Une malle de jeux par école : <a href="#/jeux/malles">Jeux → Malles des écoles</a>.</p>`;
+}
+async function saveClasses(contactId, classes) {
+  const total = classes.reduce((t, c) => t + (parseInt(c.eleves, 10) || 0), 0);
+  await setPart(contactId, { classes, effectif: total || null });
+}
+function majClasse(key, val) {
+  const [cid, i, champ] = key.split("|");
+  const p = parts.get(cid); if (!p) return;
+  const cls = classesDe(p).map((c) => ({ ...c }));
+  if (!cls[+i]) return;
+  cls[+i][champ] = champ === "eleves" ? (parseInt(val, 10) || 0) : val.trim();
+  saveClasses(cid, cls);
+}
+
+/* ---------- Établissements (contacts + participation vendredi) ---------- */
 function contactsTab(types, title) {
   const rows = contacts.filter((c) => types.includes(c.type));
   const parters = rows.filter((c) => parts.has(c.id));
@@ -99,17 +158,18 @@ function derouleTab() {
   const hm = (t) => (t || "").slice(0, 5);
   const liste = [...parts.values()].filter((p) => p.statut !== "decline")
     .map((p) => ({ p, c: contacts.find((x) => x.id === p.contact_id) })).filter((x) => x.c)
-    .sort((a, b) => (a.p.heure_debut || "99").localeCompare(b.p.heure_debut || "99") || a.c.nom.localeCompare(b.c.nom, "fr"));
+    // Ordre : heure d'arrivée, sinon matin (08:00) / après-midi (13:00) pour les écoles.
+    .sort((a, b) => (a.p.heure_debut || ({ matin: "08:00", aprem: "13:00" })[a.p.demi_journee] || "99").localeCompare(b.p.heure_debut || ({ matin: "08:00", aprem: "13:00" })[b.p.demi_journee] || "99") || a.c.nom.localeCompare(b.c.nom, "fr"));
   const STAT = Object.fromEntries(STATUTS);
   const rows = liste.map(({ p, c }) => `<tr>
-      <td><b>${p.heure_debut ? `${esc(hm(p.heure_debut))}${p.heure_fin ? "–" + esc(hm(p.heure_fin)) : ""}` : `<span class="muted">${esc(p.creneau || "heure ?")}</span>`}</b></td>
+      <td><b>${p.heure_debut ? `${esc(hm(p.heure_debut))}${p.heure_fin ? "–" + esc(hm(p.heure_fin)) : ""}` : p.demi_journee ? esc(DEMI_LBL[p.demi_journee]) : `<span class="muted">${esc(p.creneau || "heure ?")}</span>`}</b></td>
       <td>${esc(c.nom)} <span class="muted">${esc(c.type || "")}</span></td>
       <td>${p.effectif ?? "—"}</td>
       <td><span class="tag ${p.statut === "invite" ? "warn" : "ok"}">${esc(STAT[p.statut] || p.statut)}</span></td></tr>`).join("")
     || `<tr><td colspan="4" class="muted">Aucune structure invitée pour l'instant.</td></tr>`;
   const total = liste.filter(({ p }) => ["confirme", "venu"].includes(p.statut)).reduce((t, { p }) => t + (p.effectif || 0), 0);
   return `<div class="ihead"><h2 class="sect-title">Déroulé du vendredi</h2></div>
-    <div class="card"><p class="mini">${total} personne(s) confirmée(s). Les heures se saisissent dans les onglets Écoles et Établissements.</p>
+    <div class="card"><p class="mini">${total} personne(s) confirmée(s). Écoles : matin ou après-midi (onglet Écoles) ; établissements : heures (onglet Établissements).</p>
     <div class="scroll"><table class="data-table"><thead><tr><th>Heure</th><th>Structure</th><th>Effectif</th><th>Statut</th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
@@ -136,6 +196,19 @@ function wire() {
   root.querySelectorAll("[data-peff]").forEach((i) => (i.onchange = () => setPart(i.dataset.peff, { effectif: parseInt(i.value, 10) || null })));
   root.querySelectorAll("[data-pdeb]").forEach((i) => (i.onchange = () => setPart(i.dataset.pdeb, { heure_debut: i.value || null })));
   root.querySelectorAll("[data-pfin]").forEach((i) => (i.onchange = () => setPart(i.dataset.pfin, { heure_fin: i.value || null })));
+  // Écoles qui viennent
+  const er = root.querySelector("#e-retenir"); if (er) er.onclick = () => { const id = root.querySelector("#e-ecole").value; if (id) setStat(id, "confirme"); else dmsg("Choisis une école du carnet."); };
+  const ec = root.querySelector("#e-creer"); if (ec) ec.onclick = creerEcole;
+  root.querySelectorAll("[data-edemi]").forEach((sl) => (sl.onchange = () => setPart(sl.dataset.edemi, { demi_journee: sl.value || null })));
+  root.querySelectorAll("[data-eretirer]").forEach((b) => (b.onclick = () => {
+    const c = contacts.find((x) => x.id === b.dataset.eretirer);
+    if (confirm(`« ${c?.nom || "Cette école"} » ne vient plus ? Ses classes saisies sont effacées (l'école reste dans le carnet).`)) setStat(b.dataset.eretirer, "");
+  }));
+  root.querySelectorAll("[data-cl]").forEach((i) => (i.onchange = () => majClasse(i.dataset.cl, i.value)));
+  root.querySelectorAll("[data-cladd]").forEach((b) => (b.onclick = () => { const p = parts.get(b.dataset.cladd); saveClasses(b.dataset.cladd, [...classesDe(p), { nom: "", eleves: 0 }]); }));
+  root.querySelectorAll("[data-cldel]").forEach((b) => (b.onclick = () => {
+    const [cid, i] = b.dataset.cldel.split("|"); const cls = classesDe(parts.get(cid)).filter((_, k) => k !== +i); saveClasses(cid, cls);
+  }));
   const cf = root.querySelector("#csv-file"); if (cf) cf.onchange = () => { const f = cf.files[0]; if (f) f.text().then((t) => { const ta = root.querySelector("#csv-text"); if (ta) ta.value = t; }); };
   const cg = root.querySelector("#csv-go"); if (cg) cg.onclick = csvImport;
   const cc = root.querySelector("#csv-cancel"); if (cc) cc.onclick = () => { mode = "list"; draw(); };
@@ -143,6 +216,15 @@ function wire() {
 
 const dmsg = (t) => { const m = root.querySelector("#d-msg"); if (m) m.textContent = t; };
 
+async function creerEcole() {
+  const nom = (root.querySelector("#e-nom")?.value || "").trim();
+  if (!nom) return dmsg("Nom de l'école requis.");
+  const { data, error } = await supa.from("comm_contacts")
+    .insert({ nom, type: "École", commune: (root.querySelector("#e-commune")?.value || "").trim() || null }).select().single();
+  if (error) return dmsg("Erreur : " + error.message);
+  contacts.push(data); contacts.sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  await setStat(data.id, "confirme");
+}
 async function addContact() {
   const g = (id) => root.querySelector("#" + id);
   const nom = (g("n-nom").value || "").trim();
@@ -164,7 +246,8 @@ async function setStat(contactId, statut) {
   const cur = parts.get(contactId);
   const c = contacts.find((x) => x.id === contactId);
   const row = { edition_id: store.editionId, contact_id: contactId, statut,
-    effectif: cur?.effectif ?? (c?.quantite_flyers || null), creneau: cur?.creneau || null };
+    // Écoles : effectif = total des classes (pas le nombre de flyers du carnet).
+    effectif: cur?.effectif ?? (c?.type === "École" ? null : (c?.quantite_flyers || null)), creneau: cur?.creneau || null };
   const { data, error } = await supa.from("vendredi_participants").upsert(row, { onConflict: "edition_id,contact_id" }).select().single();
   if (error) return toast("Erreur : " + error.message);
   parts.set(contactId, data); draw();

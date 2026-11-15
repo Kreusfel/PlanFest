@@ -44,6 +44,7 @@ let jeux = new Map();      // catalogue : id → jeu
 let sel = new Map();       // sélection de l'édition : jeu_id → ligne jeux_editions
 let choix = new Map();     // tri de la ludothèque : jeu_id → oui | bar | non
 let preteursPasses = [];  // prêteurs déjà saisis (toutes éditions), pour les suggestions
+let ecoles = [];           // écoles qui viennent au festival (une malle chacune) : { contact_id, nom, demi_journee }
 let malles = [];           // malles des écoles : { id, jeu_id, malle } (un jeu peut être dans plusieurs)
 let cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = [];
 let edIds = new Set(), edIdsIci = new Set();   // organismes éditeurs (toutes éditions / cette édition)
@@ -71,7 +72,8 @@ function usageTexte(j) {
   const ms = mallesDe(j.id).map((m) => m.malle), f = auFestival(j);
   return [ms.length ? `malle${ms.length > 1 ? "s" : ""} ${ms.join(", ")}` : "", f ? `festival ×${f}` : ""].filter(Boolean).join(" puis ") || "non utilisé";
 }
-const nomsMalles = () => [...new Set(malles.map((m) => m.malle))].sort((a, b) => a.localeCompare(b, "fr"));
+const nomsEcoles = () => ecoles.map((e) => e.nom);
+const nomsMalles = () => [...new Set([...nomsEcoles(), ...malles.map((m) => m.malle).sort((a, b) => a.localeCompare(b, "fr"))])];
 const catNom = (id) => cats.find((c) => c.id === id)?.nom || "—";
 const orgNom = (id) => orgs.find((o) => o.id === id)?.nom || "—";
 const beneNom = (id) => benes.find((b) => b.id === id)?.nom || "?";
@@ -120,6 +122,8 @@ async function load() {
     supa.from("organisme_editions").select("organisme_id, edition_id").contains("roles", ["editeur"]),
     supa.from("malle_jeux").select("id, jeu_id, malle").eq("edition_id", ed),
   ]);
+  const ec = await supa.rpc("ecoles_festival", { p_edition: ed });
+  ecoles = ec.data ?? [];
   const pp = await supa.from("jeux_editions").select("provenance_detail").eq("provenance", "pret").not("provenance_detail", "is", null);
   preteursPasses = [...new Set((pp.data ?? []).map((x) => x.provenance_detail.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
   malles = mj.data ?? [];
@@ -312,20 +316,23 @@ function ludoView() {
 // plusieurs malles (plusieurs exemplaires) et au festival en même temps.
 function mallesView() {
   const w = canMalles(), ludo = [...jeux.values()].filter((j) => j.ludotheque).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
-  const ajoutForm = w ? `<div class="card"><div class="ihead"><h3>Ajouter un jeu à une malle</h3></div>
+  const sansEcole = !ecoles.length ? `<div class="card"><p class="sync-warn">Aucune école retenue pour ce festival : choisis d'abord les écoles qui viennent dans
+      <a href="#/intergeneration">Intergénérationnel → Écoles</a>. Chaque école reçoit sa malle.</p></div>` : "";
+  const ajoutForm = w && ecoles.length ? `<div class="card"><div class="ihead"><h3>Ajouter un jeu à une malle</h3></div>
     <form id="malle-form" class="filters" style="align-items:flex-end">
       <label>Jeu de la ludothèque<input id="m-jeu" list="m-jeux-dl" placeholder="Tape le titre…" autocomplete="off"></label>
       <datalist id="m-jeux-dl">${ludo.map((j) => `<option value="${esc(j.titre)}">`).join("")}</datalist>
-      <label>Malle<input id="m-malle" list="m-malles-dl" placeholder="ex. le nom de l'école" autocomplete="off"></label>
-      <datalist id="m-malles-dl">${nomsMalles().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <label>Malle de l'école<select id="m-malle">${nomsEcoles().map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("")}</select></label>
       <button class="btn primary" type="submit">Ajouter</button>
     </form>
-    <p class="mini">Une malle par école (en général deux par édition) ; un même jeu peut être dans les deux. Seuls les jeux de l'asso (ludothèque) vont en malle. ${ludo.length ? "" : "La ludothèque est vide : ajoute d'abord des jeux de l'asso."}</p></div>` : "";
+    <p class="mini">Une malle par école retenue ; un même jeu peut être dans plusieurs malles. Seuls les jeux de l'asso (ludothèque) vont en malle. ${ludo.length ? "" : "La ludothèque est vide : ajoute d'abord des jeux de l'asso."}</p></div>` : "";
   const groupes = nomsMalles().map((nom) => {
     const lignes = malles.filter((m) => m.malle === nom).map((m) => ({ m, j: jeux.get(m.jeu_id) })).filter((x) => x.j)
       .sort((a, b) => a.j.titre.localeCompare(b.j.titre, "fr"));
-    return `<div class="card"><div class="ihead"><h3>${esc(nom)}</h3><span class="muted">${plur(lignes.length, "jeu", "jeux")}
-        ${w ? ` <button class="btn small" data-mcopy="${esc(nom)}">Copier vers une autre malle</button>` : ""}</span></div>
+    const ecole = ecoles.find((e) => e.nom === nom);
+    return `<div class="card"><div class="ihead"><h3>${esc(nom)}${ecole?.demi_journee ? ` <span class="muted">${ecole.demi_journee === "matin" ? "matin" : "après-midi"}</span>` : ""}${!ecole ? ` <span class="pill grey">école non retenue</span>` : ""}</h3><span class="muted">${plur(lignes.length, "jeu", "jeux")}
+        ${w && lignes.length && nomsEcoles().length > 1 ? ` <button class="btn small" data-mcopy="${esc(nom)}">Copier vers l'autre école</button>` : ""}</span></div>
+      ${lignes.length ? "" : `<p class="muted">Malle vide.</p>`}
       <div class="scroll"><table class="data-table"><tbody>${lignes.map(({ m, j }) => `<tr>
         <td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b>${mallesDe(j.id).length > 1 ? ` <span class="pill grey">aussi : ${esc(mallesDe(j.id).filter((x) => x.id !== m.id).map((x) => x.malle).join(", "))}</span>` : ""}${sel.has(j.id) ? ` <span class="pill blue">au festival</span>` : ""}${manque(j) ? ` <span class="pill alert">manque ${manque(j)} ex.</span>` : ""}</td>
         <td class="muted">${esc(meta(j) || "—")}</td>
@@ -338,7 +345,7 @@ function mallesView() {
     <div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Manque</th><th>Possédés</th><th>Utilisation</th></tr></thead><tbody>
     ${ao.map((j) => `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td><td><span class="tag bad">${manque(j)}</span></td>
       <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></div>` : "";
-  return `<p class="mini" style="margin:8px 2px">${plur(malles.length, "jeu", "jeux")} dans ${plur(nomsMalles().length, "malle", "malles")} (prêtées aux écoles).</p>${obtenir}${ajoutForm}${groupes}`;
+  return `<p class="mini" style="margin:8px 2px">${plur(malles.length, "jeu", "jeux")} en malle · ${plur(ecoles.length, "école retenue", "écoles retenues")} (<a href="#/intergeneration">Intergénérationnel → Écoles</a>).</p>${sansEcole}${obtenir}${ajoutForm}${groupes}`;
 }
 
 /* ---------- onglet Prêts (restitution) ---------- */
@@ -525,9 +532,12 @@ function blocMalles(j) {
     <p class="mini">Utilisation : ${esc(usageTexte(j))} · ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}
       ${manque(j) ? ` <span class="pill alert">manque ${manque(j)}</span>` : ""}</p>
     ${ms.length ? `<div class="chk-row">${ms.map((m) => `<span class="pill grey">${esc(m.malle)}${w ? ` <button class="link" data-mdel="${m.id}" aria-label="Retirer de la malle ${esc(m.malle)}">×</button>` : ""}</span>`).join(" ")}</div>` : `<p class="muted">Dans aucune malle.</p>`}
-    ${w ? `<div class="lier-bgg"><input id="f-malle" list="f-malles-dl" placeholder="Nom de la malle" aria-label="Ajouter à une malle">
-      <datalist id="f-malles-dl">${nomsMalles().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
-      <button class="btn small" data-madd="${j.id}">Ajouter à la malle</button></div>` : ""}</div>`;
+    ${w ? (() => {
+      const dispo = nomsEcoles().filter((n) => !ms.some((m) => m.malle === n));
+      return dispo.length ? `<div class="lier-bgg"><select id="f-malle" aria-label="Malle de l'école">${dispo.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("")}</select>
+        <button class="btn small" data-madd="${j.id}">Ajouter à la malle</button></div>`
+        : `<p class="mini">${ecoles.length ? "Déjà dans la malle de chaque école." : `Aucune école retenue (<a href="#/intergeneration">Intergénérationnel → Écoles</a>).`}</p>`;
+    })() : ""}</div>`;
 }
 function blocFestival(j, je, ro) {
   const a = animFor(j);
@@ -744,8 +754,14 @@ async function copierObtenir() {
 }
 // Copie tous les jeux d'une malle vers une autre (nouvelle ou existante), sans doublon.
 async function copierMalle(source) {
-  const cible = (prompt(`Copier les jeux de « ${source} » vers quelle malle ? (nom de la malle, nouvelle ou existante)`) || "").trim();
-  if (!cible || cible === source) return;
+  const autres = nomsEcoles().filter((n) => n !== source);
+  if (!autres.length) { toast("Aucune autre école retenue vers laquelle copier."); return; }
+  let cible = autres[0];
+  if (autres.length > 1) {
+    const rep = (prompt(`Copier les jeux de « ${source} » vers quelle école ?\n${autres.map((n, i) => `${i + 1}. ${n}`).join("\n")}\n\nTape le numéro :`) || "").trim();
+    cible = autres[(parseInt(rep, 10) || 0) - 1];
+    if (!cible) return;
+  } else if (!confirm(`Copier les jeux de « ${source} » dans la malle de « ${cible} » ?`)) return;
   const deja = new Set(malles.filter((m) => m.malle === cible).map((m) => m.jeu_id));
   const rows = malles.filter((m) => m.malle === source && !deja.has(m.jeu_id))
     .map((m) => ({ edition_id: store.editionId, jeu_id: m.jeu_id, malle: cible }));
