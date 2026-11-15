@@ -37,6 +37,11 @@ function editeurs(itemXml: string): string[] {
     .filter((n) => n && !/^\((uncredited|web published|self-published)\)$/i.test(n));
   return [...new Set(noms)].slice(0, 20);
 }
+// Comparaison de titres : minuscules, sans accents ni ponctuation (« Root » = « root »).
+const comparable = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// Version « mots » (espaces gardés) pour repérer le mot entier : « root » dans « Root: Underworld ».
+const motsSimples = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const echapper = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function parseItem(itemXml: string) {
   const id = (itemXml.match(/id="(\d+)"/) || [])[1];
   const name = (itemXml.match(/<name[^>]*type="primary"[^>]*value="([^"]*)"/) || [])[1]
@@ -94,11 +99,31 @@ Deno.serve(async (req) => {
       return json(parseItem(item));
     }
     if (!query || !String(query).trim()) return json({ results: [] });
+    // BGG renvoie tous les jeux dont le nom CONTIENT la recherche, dans un ordre peu utile
+    // (« Root » noyé parmi les « … Roots … »). On classe : titre exact, puis « commence par »,
+    // puis mot entier, puis le reste ; les extensions après les jeux de base ; à rang égal,
+    // les plus populaires (nombre de notes BGG) d'abord.
     const sx = await fetchText(`https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(query)}`);
-    const ids = [...sx.matchAll(/<item[^>]*id="(\d+)"/g)].map((m) => m[1]).slice(0, 8);
-    if (!ids.length) return json({ results: [] });
-    const tx = await fetchText(`https://boardgamegeek.com/xmlapi2/thing?stats=1&id=${ids.join(",")}`);
-    const results = [...tx.matchAll(/<item[\s\S]*?<\/item>/g)].map((m) => parseItem(m[0]));
+    const cible = comparable(String(query));
+    const candidats = [...sx.matchAll(/<item[^>]*type="([^"]*)"[^>]*id="(\d+)"[^>]*>([\s\S]*?)<\/item>/g)].map((m) => {
+      const nom = decode((m[3].match(/<name[^>]*value="([^"]*)"/) || [])[1] || "");
+      const c = comparable(nom);
+      const rang = c === cible ? 0 : c.startsWith(cible) ? 1 : new RegExp(`(^|[^a-z0-9])${echapper(motsSimples(String(query)))}([^a-z0-9]|$)`).test(motsSimples(nom)) ? 2 : 3;
+      return { id: m[2], rang: rang * 2 + (m[1] === "boardgame" ? 0 : 1) };
+    });
+    // Un même jeu peut apparaître deux fois (nom principal + nom alternatif) : garder le meilleur rang.
+    const parId = new Map();
+    candidats.forEach((x) => { const cur = parId.get(x.id); if (!cur || x.rang < cur.rang) parId.set(x.id, x); });
+    const tries = [...parId.values()].sort((a, b) => a.rang - b.rang).slice(0, 20);
+    if (!tries.length) return json({ results: [] });
+    const rangDe = new Map(tries.map((x) => [x.id, x.rang]));
+    const tx = await fetchText(`https://boardgamegeek.com/xmlapi2/thing?stats=1&id=${tries.map((x) => x.id).join(",")}`);
+    const results = [...tx.matchAll(/<item[\s\S]*?<\/item>/g)].map((m) => ({
+        ...parseItem(m[0]), _notes: num(attr(m[0], "usersrated")) || 0,
+      }))
+      .sort((a, b) => (rangDe.get(String(a.bgg_id)) ?? 9) - (rangDe.get(String(b.bgg_id)) ?? 9) || b._notes - a._notes)
+      .slice(0, 10)
+      .map(({ _notes, ...r }) => r);
     return json({ results });
   } catch (e) {
     return json({ error: String(e) }, 500);
