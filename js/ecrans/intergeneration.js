@@ -38,10 +38,12 @@ function draw() {
   const subTabs = `<div class="utabs">
     <button data-tab="ecoles"${tab === "ecoles" ? ' class="on"' : ""}>Écoles</button>
     <button data-tab="etab"${tab === "etab" ? ' class="on"' : ""}>Établissements</button>
-    <button data-tab="malles"${tab === "malles" ? ' class="on"' : ""}>Malles écoles</button></div>`;
+    <button data-tab="malles"${tab === "malles" ? ' class="on"' : ""}>Malles écoles</button>
+    <button data-tab="deroule"${tab === "deroule" ? ' class="on"' : ""}>Déroulé du vendredi</button></div>`;
   let body;
   if (mode === "csv") body = csvView();
   else if (tab === "malles") body = mallesTab();
+  else if (tab === "deroule") body = derouleTab();
   else if (tab === "etab") body = contactsTab(ETAB_TYPES, "Établissements invités le vendredi");
   else body = contactsTab(["École"], "Écoles choisies pour l'event");
   root.innerHTML = `<div class="page-head"><div><h1>Intergénérationnel</h1>
@@ -85,16 +87,39 @@ function contactsTab(types, title) {
       <td><b>${esc(c.nom)}</b>${c.commune && c.commune !== c.nom ? ` <span class="muted">${esc(c.commune)}</span>` : ""}</td>
       <td class="muted">${esc(c.email || "")}</td>
       <td><input type="number" min="0" data-peff="${c.id}" value="${p?.effectif ?? (c.quantite_flyers || "")}" style="width:80px;margin:0"${ro}></td>
-      <td><input data-pcren="${c.id}" value="${esc(p?.creneau || "")}" placeholder="ex. 10h-11h" style="min-width:110px;margin:0"${ro}></td>
+      <td><div class="heures"><input type="time" data-pdeb="${c.id}" value="${esc((p?.heure_debut || "").slice(0, 5))}" aria-label="Arrivée de ${esc(c.nom)}"${ro}>
+        <span class="muted">→</span><input type="time" data-pfin="${c.id}" value="${esc((p?.heure_fin || "").slice(0, 5))}" aria-label="Départ de ${esc(c.nom)}"${ro}></div>
+        ${p?.creneau && !p?.heure_debut ? `<span class="mini">avant : ${esc(p.creneau)}</span>` : ""}</td>
       <td>${statSel(c)}</td></tr>`;
   }).join("") || `<tr><td colspan="5" class="muted">Aucun contact. Ajoute-en ou importe un CSV.</td></tr>`;
 
   const table = `<div class="card"><div class="scroll"><table class="data-table">
-    <thead><tr><th>${isEcole ? "École" : "Établissement"}</th><th>Email</th><th>Effectif</th><th>Créneau</th><th>Participation</th></tr></thead>
+    <thead><tr><th>${isEcole ? "École" : "Établissement"}</th><th>Email</th><th>Effectif</th><th>Arrivée → départ</th><th>Participation</th></tr></thead>
     <tbody>${body}</tbody></table></div>
     <p class="mini">Mettre « Invité/Confirmé » retient le contact pour le vendredi ; « — non invité — » le retire (le contact reste dans le carnet).</p></div>`;
 
   return `<div class="ihead"><h2 class="sect-title">${esc(title)}</h2></div>${kpis}${addForm}${table}`;
+}
+
+/* ---------- Déroulé du vendredi ---------- */
+// Toutes les structures invitées ou confirmées (écoles + établissements), par heure d'arrivée.
+function derouleTab() {
+  const hm = (t) => (t || "").slice(0, 5);
+  const liste = [...parts.values()].filter((p) => p.statut !== "decline")
+    .map((p) => ({ p, c: contacts.find((x) => x.id === p.contact_id) })).filter((x) => x.c)
+    .sort((a, b) => (a.p.heure_debut || "99").localeCompare(b.p.heure_debut || "99") || a.c.nom.localeCompare(b.c.nom, "fr"));
+  const STAT = Object.fromEntries(STATUTS);
+  const rows = liste.map(({ p, c }) => `<tr>
+      <td><b>${p.heure_debut ? `${esc(hm(p.heure_debut))}${p.heure_fin ? "–" + esc(hm(p.heure_fin)) : ""}` : `<span class="muted">${esc(p.creneau || "heure ?")}</span>`}</b></td>
+      <td>${esc(c.nom)} <span class="muted">${esc(c.type || "")}</span></td>
+      <td>${p.effectif ?? "—"}</td>
+      <td><span class="tag ${p.statut === "invite" ? "warn" : "ok"}">${esc(STAT[p.statut] || p.statut)}</span></td></tr>`).join("")
+    || `<tr><td colspan="4" class="muted">Aucune structure invitée pour l'instant.</td></tr>`;
+  const total = liste.filter(({ p }) => ["confirme", "venu"].includes(p.statut)).reduce((t, { p }) => t + (p.effectif || 0), 0);
+  return `<div class="ihead"><h2 class="sect-title">Déroulé du vendredi</h2></div>
+    <div class="card"><p class="mini">${total} personne(s) confirmée(s). Les heures se saisissent dans les onglets Écoles et Établissements.</p>
+    <div class="scroll"><table class="data-table"><thead><tr><th>Heure</th><th>Structure</th><th>Effectif</th><th>Statut</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
 }
 
 /* ---------- Malles écoles (jeux) ---------- */
@@ -145,7 +170,8 @@ function wire() {
   const ic = root.querySelector("#imp-csv"); if (ic) ic.onclick = () => { csvMsg = ""; mode = "csv"; draw(); };
   root.querySelectorAll("[data-pstat]").forEach((s) => (s.onchange = () => setStat(s.dataset.pstat, s.value)));
   root.querySelectorAll("[data-peff]").forEach((i) => (i.onchange = () => setPart(i.dataset.peff, { effectif: parseInt(i.value, 10) || null })));
-  root.querySelectorAll("[data-pcren]").forEach((i) => (i.onchange = () => setPart(i.dataset.pcren, { creneau: i.value.trim() || null })));
+  root.querySelectorAll("[data-pdeb]").forEach((i) => (i.onchange = () => setPart(i.dataset.pdeb, { heure_debut: i.value || null })));
+  root.querySelectorAll("[data-pfin]").forEach((i) => (i.onchange = () => setPart(i.dataset.pfin, { heure_fin: i.value || null })));
   const ma = root.querySelector("#m-add"); if (ma) ma.onclick = addMalle;
   root.querySelectorAll("[data-mdel]").forEach((b) => (b.onclick = () => delMalle(b.dataset.mdel)));
   const cf = root.querySelector("#csv-file"); if (cf) cf.onchange = () => { const f = cf.files[0]; if (f) f.text().then((t) => { const ta = root.querySelector("#csv-text"); if (ta) ta.value = t; }); };

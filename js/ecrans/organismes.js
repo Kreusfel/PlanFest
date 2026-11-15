@@ -111,6 +111,7 @@ function orgTr(oe) {
     <td class="muted">${oe.dernier_contact ? esc(oe.dernier_contact) : "jamais"}</td>
     <td class="muted">${esc(extra)}</td>
     ${scope === "partenaire" && view.mode === "list" ? `<td>${dossierTags(oe)}</td>` : ""}
+    ${scope === "sponsor" && view.mode === "list" ? `<td>${!oe.contreparties ? '<span class="muted">—</span>' : oe.contreparties_faites ? '<span class="tag ok">faites</span>' : '<span class="tag warn">à faire</span>'}</td>` : ""}
   </tr>`;
 }
 
@@ -181,7 +182,7 @@ function listView() {
         ${scope === "partenaire" ? `<button class="btn small${filt.dossier ? " primary" : ""}" id="f-dossier" title="Confirmés sans convention ou sans assurance">Dossier incomplet (${list.filter((x) => (x.roles || []).includes("partenaire") && x.statut === "confirme" && !dossierComplet(x)).length})</button>` : ""}
       </div>
       <div class="scroll"><table class="data-table">
-        <thead><tr><th>Organisme</th><th>Rôle</th><th>Contact</th><th>Statut</th><th>Dernier contact</th><th>Tables / jeux</th>${scope === "partenaire" ? "<th>Dossier</th>" : ""}</tr></thead>
+        <thead><tr><th>Organisme</th><th>Rôle</th><th>Contact</th><th>Statut</th><th>Dernier contact</th><th>Tables / jeux</th>${scope === "partenaire" ? "<th>Dossier</th>" : ""}${scope === "sponsor" ? "<th>Contreparties</th>" : ""}</tr></thead>
         <tbody>${rows}</tbody></table></div>
     </div>`;
 }
@@ -266,6 +267,8 @@ function ficheView() {
         <div data-sec="sponsor"${isS ? "" : ' style="display:none"'}>
           <h3>Sponsor</h3>
           ${field("Nature de l'aide", `<input data-e="nature_aide" value="${esc(oe.nature_aide || "")}"${ro}>`)}
+          ${field("Contreparties promises", `<textarea data-e="contreparties" placeholder="ex. logo sur l'affiche, mention au micro, stand…"${ro}>${esc(oe.contreparties || "")}</textarea>`)}
+          ${field("", `<span class="chk-inline"><input type="checkbox" data-e="contreparties_faites"${oe.contreparties_faites ? " checked" : ""}${ro}> Contreparties faites</span>`)}
         </div>
         <div data-sec="regime"${isP ? "" : ' style="display:none"'}>
           ${field("Régime / allergies (repas)", `<input data-regime value="${esc(regimes[oe.id] || "")}" placeholder="ex. 1 sans gluten, 2 végétariens…"${ro}>`)}
@@ -427,6 +430,7 @@ async function saveFiche() {
     electricite: getE("electricite").checked,
     convention_recue: getE("convention_recue").checked, assurance_recue: getE("assurance_recue").checked,
     nature_aide: getE("nature_aide").value || null, logo_url: getE("logo_url").value || null,
+    contreparties: getE("contreparties").value || null, contreparties_faites: getE("contreparties_faites").checked,
     notes: getE("notes").value || null };
   const regime = root.querySelector("[data-regime]")?.value || "";
   const [r1, r2, r3] = await Promise.all([

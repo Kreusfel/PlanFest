@@ -1,8 +1,10 @@
 // Écran #/bilan — chiffres de l'édition (RPC bilan, migration 038), comparés à l'édition
-// précédente (N-1, par date du samedi), exports CSV, purge RGPD. Admin.
+// précédente (N-1, par date du samedi), exports CSV. Responsables de pôle et admins ;
+// la purge RGPD est réservée aux admins.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
 import { esc, telecharger, slug } from "../ui/util.js";
+import { isAdmin } from "../auth.js";
 
 const JOUR_LBL = { ven: "Vendredi", sam: "Samedi", dim: "Dimanche" };
 const TRANCHES = ["3+", "6+", "8+", "13+", "adulte"];
@@ -19,7 +21,7 @@ export async function render(container) {
     supa.rpc("bilan", { p_edition: store.editionId }),
     supa.from("editions").select("id,nom,date_samedi").order("date_samedi"),
   ]);
-  if (b.error) { root.innerHTML = page(`<div class="card"><p class="msg">${b.error.message.includes("acces") ? "Réservé aux admins." : "Erreur : " + esc(b.error.message)}</p></div>`); return; }
+  if (b.error) { root.innerHTML = page(`<div class="card"><p class="msg">${b.error.message.includes("acces") ? "Réservé aux responsables de pôle et aux admins." : "Erreur : " + esc(b.error.message)}</p></div>`); return; }
   data = b.data || {};
   const liste = eds.data || [];
   const i = liste.findIndex((e) => e.id === store.editionId);
@@ -93,11 +95,11 @@ function draw() {
     <div class="scroll"><table class="data-table"><thead><tr><th>Code postal</th><th>Ville</th><th>Entrées</th><th>Part</th></tr></thead>
       <tbody>${provRows}</tbody></table></div>
   </div>
-  <div class="card admin-sec" style="margin-top:14px"><h2>Clôture et RGPD</h2>
+  ${isAdmin() ? `<div class="card admin-sec" style="margin-top:14px"><h2>Clôture et RGPD</h2>
     <p class="mini">Après l'édition : efface les données sensibles (régimes, présences, disponibilités). Les compteurs ci-dessus restent, sauf les pointages de présence.</p>
     <button class="btn danger" id="purge">Purger les données nominatives</button>
     <p class="msg" id="b-msg"></p>
-  </div>`);
+  </div>` : ""}`);
 }
 
 function wireOnce() {

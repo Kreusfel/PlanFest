@@ -456,3 +456,5 @@ input[type=color]{padding:3px;height:44px}
 .scan-form input{width:150px;margin:0}
 .lier-bgg{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .lier-bgg input{flex:1;min-width:180px;margin:0}
+.heures{display:flex;align-items:center;gap:4px}
+.heures input{width:100px;margin:0}
