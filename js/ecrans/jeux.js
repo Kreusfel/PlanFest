@@ -40,16 +40,18 @@ const canWrite = () => isAdmin() || hasPole("jeux_editeurs");
 // Malles des écoles : pôle Jeux et pôle Intergénérationnel (migration 046).
 const canMalles = () => canWrite() || hasPole("intergenerationnelle");
 const mallesDe = (jeuId) => malles.filter((m) => m.jeu_id === jeuId);
-// Exemplaires (jeux de l'asso) : chaque malle en mobilise un, le festival les siens ;
-// tout est compté comme utilisé en même temps (le plus sûr).
+// Exemplaires (jeux de l'asso) : les malles sont prêtées en même temps (une par école,
+// un exemplaire chacune) et rendues le vendredi ; le samedi, ces exemplaires sont libres
+// pour le festival. Besoin = le plus grand des deux, pas la somme.
 const possedes = (j) => j.exemplaires_asso ?? 1;
 const auFestival = (j) => (j.ludotheque && sel.has(j.id) ? (sel.get(j.id).exemplaires || 1) : 0);
-const besoin = (j) => mallesDe(j.id).length + auFestival(j);
+const besoin = (j) => Math.max(mallesDe(j.id).length, auFestival(j));
+const besoinAvecUneMalleDePlus = (j) => Math.max(mallesDe(j.id).length + 1, auFestival(j));
 const manque = (j) => (j.ludotheque ? Math.max(0, besoin(j) - possedes(j)) : 0);
 const aObtenir = () => [...jeux.values()].filter((j) => manque(j) > 0).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
 function usageTexte(j) {
   const ms = mallesDe(j.id).map((m) => m.malle), f = auFestival(j);
-  return [ms.length ? `malle${ms.length > 1 ? "s" : ""} ${ms.join(", ")}` : "", f ? `festival ×${f}` : ""].filter(Boolean).join(" + ") || "non utilisé";
+  return [ms.length ? `malle${ms.length > 1 ? "s" : ""} ${ms.join(", ")}` : "", f ? `festival ×${f}` : ""].filter(Boolean).join(" puis ") || "non utilisé";
 }
 const nomsMalles = () => [...new Set(malles.map((m) => m.malle))].sort((a, b) => a.localeCompare(b, "fr"));
 const catNom = (id) => cats.find((c) => c.id === id)?.nom || "—";
@@ -308,7 +310,7 @@ function mallesView() {
   const ao = aObtenir();
   const obtenir = ao.length ? `<div class="card"><div class="ihead"><h3>À obtenir</h3><span class="tag bad">${ao.length}</span>
       <button class="btn small" id="copier-obtenir">Copier la liste</button></div>
-    <p class="mini">Jeux dont il manque des exemplaires (malles + festival, comptés en même temps). Achète-les, demande-les en don, ou augmente le nombre d'exemplaires sur leur fiche s'il était faux.</p>
+    <p class="mini">Jeux dont il manque des exemplaires : il en faut un par malle (prêtées en même temps), ou autant qu'au festival si c'est plus (les malles sont rendues le vendredi). Achète-les, demande-les en don, ou augmente le nombre d'exemplaires sur leur fiche s'il était faux.</p>
     <div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Manque</th><th>Possédés</th><th>Utilisation</th></tr></thead><tbody>
     ${ao.map((j) => `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td><td><span class="tag bad">${manque(j)}</span></td>
       <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></div>` : "";
@@ -615,8 +617,8 @@ async function ajouterMalle(jeuId, nom) {
   if (!nom) { toast("Indique le nom de la malle."); return; }
   if (malles.some((m) => m.jeu_id === jeuId && m.malle === nom)) { toast("Ce jeu est déjà dans cette malle."); return; }
   const j = jeux.get(jeuId);
-  if (j && besoin(j) + 1 > possedes(j)
-    && !confirm(`Plus d'exemplaire libre pour « ${j.titre} » : ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}, déjà utilisé(s) (${usageTexte(j)}).\n\nL'ajouter quand même à « ${nom} » ? Il passera dans la liste « À obtenir ».\n(Si l'asso en a en réalité plus, corrige plutôt le nombre d'exemplaires sur sa fiche.)`)) return;
+  if (j && besoinAvecUneMalleDePlus(j) > possedes(j)
+    && !confirm(`Pas assez d'exemplaires de « ${j.titre} » pour une malle de plus : ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}, déjà en malle (${usageTexte(j)}).\n\nL'ajouter quand même à « ${nom} » ? Il passera dans la liste « À obtenir ».\n(Si l'asso en a en réalité plus, corrige plutôt le nombre d'exemplaires sur sa fiche.)`)) return;
   const { data, error } = await supa.from("malle_jeux").insert({ edition_id: store.editionId, jeu_id: jeuId, malle: nom }).select("id, jeu_id, malle").single();
   if (error) { toast("Erreur : " + error.message); return; }
   malles.push(data);
@@ -635,7 +637,7 @@ async function copierMalle(source) {
   const rows = malles.filter((m) => m.malle === source && !deja.has(m.jeu_id))
     .map((m) => ({ edition_id: store.editionId, jeu_id: m.jeu_id, malle: cible }));
   if (!rows.length) { toast(`« ${cible} » contient déjà tous ces jeux.`); return; }
-  const manquants = rows.map((r) => jeux.get(r.jeu_id)).filter((j) => j && besoin(j) + 1 > possedes(j));
+  const manquants = rows.map((r) => jeux.get(r.jeu_id)).filter((j) => j && besoinAvecUneMalleDePlus(j) > possedes(j));
   if (manquants.length && !confirm(`${plur(manquants.length, "jeu n'a", "jeux n'ont")} plus d'exemplaire libre (${manquants.slice(0, 5).map((j) => j.titre).join(", ")}${manquants.length > 5 ? "…" : ""}).\n\nCopier quand même ? Ils passeront dans la liste « À obtenir ».`)) return;
   const { data, error } = await supa.from("malle_jeux").insert(rows).select("id, jeu_id, malle");
   if (error) { toast("Erreur : " + error.message); return; }
