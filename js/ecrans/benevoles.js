@@ -98,6 +98,8 @@ function listView() {
         <select id="f-statut">${sOpts}</select>
         <select id="f-equipe">${eOpts}</select>
         <button class="btn small${filt.anim ? " primary" : ""}" id="f-anim">Animateurs</button>
+        <button class="btn small" id="f-emails" title="Adresses des bénévoles affichés (filtres compris)">Copier les e-mails</button>
+        <button class="btn small" id="f-lien" title="Chaque bénévole y voit ses parties et permanences après connexion">Copier le lien « Mon planning »</button>
       </div>
       <div class="scroll"><table class="data-table">
         <thead><tr><th>Nom</th><th>E-mail</th><th>Équipes</th><th>Statut</th><th>Repas</th></tr></thead>
@@ -232,6 +234,22 @@ function ficheView() {
     <p class="msg" id="b-msg"></p>`;
 }
 
+
+// Copie une liste d'e-mails (séparés par des virgules) pour un envoi groupé en copie cachée.
+async function copierEmails(emails) {
+  const liste = [...new Set(emails.map((e) => (e || "").split(/[\/,;\s]+/)[0].trim().toLowerCase()).filter((e) => e.includes("@")))];
+  if (!liste.length) { toast("Aucune adresse e-mail dans cette liste."); return; }
+  try { await navigator.clipboard.writeText(liste.join(", ")); toast(`${liste.length} adresse(s) copiée(s) : colle-les en « Cci » de ton message.`, "ok"); }
+  catch { prompt("Copie ces adresses :", liste.join(", ")); }
+}
+
+// Lien vers « Mon planning » (même adresse pour tous : chacun voit le sien une fois connecté).
+async function copierLien() {
+  const lien = `${location.origin}${location.pathname}#/terrain/moi`;
+  try { await navigator.clipboard.writeText(lien); toast("Lien copié : chaque bénévole y voit son planning (et « Mes infos ») après connexion.", "ok"); }
+  catch { prompt("Copie ce lien :", lien); }
+}
+
 /* ---------- câblage ---------- */
 function wireOnce() {
   if (root.__benWired) return;
@@ -252,6 +270,8 @@ function onClick(e) {
   if (t.closest("#invite")) return invite();
   if (t.closest("#effacer")) return effacer();
   if (t.closest("#f-anim")) { filt.anim = !filt.anim; return go(); }
+  if (t.closest("#f-emails")) return copierEmails(filtered().map((be) => be.benevoles.email));
+  if (t.closest("#f-lien")) return copierLien();
   const r = t.closest("[data-open]");
   if (r) return openFiche(r.dataset.open);
 }

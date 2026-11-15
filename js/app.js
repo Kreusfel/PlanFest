@@ -18,6 +18,7 @@ import * as communication from "./ecrans/communication.js";
 import * as intergeneration from "./ecrans/intergeneration.js";
 import * as competences from "./ecrans/competences.js";
 import * as mesCompetences from "./ecrans/mes-competences.js";
+import * as mesInfos from "./ecrans/mes-infos.js";
 import * as permanences from "./ecrans/permanences.js";
 import * as terrain from "./ecrans/terrain.js";
 import * as accueil from "./ecrans/accueil.js";
@@ -45,6 +46,7 @@ const SCREENS = {
   // Ancienne adresse : « Mon planning » est désormais un onglet de « Sur le terrain ».
   "/mon-planning": { render: (c) => terrain.render(c, "moi"), unmount: terrain.unmount },
   "/mes-competences": mesCompetences,
+  "/mes-infos": mesInfos,
   "/competences": competences,
   "/benevoles": benevoles,
   "/presences": presences,
@@ -60,29 +62,31 @@ const SCREENS = {
 };
 
 // `poles` = pôles que l'écran sert (pour le groupe « Mon pôle » prioritaire).
-// `can` = visibilité : les écrans opérationnels sont visibles en lecture par tout
-// utilisateur actif (l'édition reste verrouillée en interne + RLS) ; seuls Présences
-// (outil jour J) et les écrans Réglages/Bilan restent réservés.
+// `can` = visibilité dans le menu : un écran n'apparaît que si la personne peut en voir
+// les données (sinon il s'ouvrait vide, sans explication). Les droits réels restent en base.
+const pour = (...poles) => () => isAdmin() || poles.some((p) => hasPole(p));
+const tous = () => true;
 const NAV = [
-  { group: "Pilotage", path: "/", label: "Tableau de bord", can: () => true, poles: [] },
-  { group: "Préparer", path: "/organismes", label: "Organismes", can: () => true, poles: ["partenaires", "jeux_editeurs", "sponsors", "communication"] },
-  { group: "Préparer", path: "/jeux", label: "Jeux", can: () => true, poles: ["jeux_editeurs"] },
-  { group: "Préparer", path: "/benevoles", label: "Bénévoles", can: () => true, poles: ["animateurs_benevoles", "intergenerationnelle"] },
-  { group: "Préparer", path: "/competences", label: "Compétences (équipe)", can: () => true, poles: ["animateurs_benevoles"] },
-  { group: "Préparer", path: "/subventions", label: "Subventions", can: () => true, poles: ["sponsors"] },
-  { group: "Préparer", path: "/inscriptions", label: "Inscriptions reçues", can: () => true, poles: ["partenaires", "animateurs_benevoles"] },
-  { group: "Préparer", path: "/communication", label: "Communication", can: () => true, poles: ["communication"] },
-  { group: "Préparer", path: "/intergeneration", label: "Intergénérationnel", can: () => true, poles: ["intergenerationnelle"] },
-  { group: "Planifier", path: "/plan", label: "Plan des salles", can: () => true, poles: ["logistique_securite", "partenaires"] },
-  { group: "Planifier", path: "/repartition", label: "Répartition tables", can: () => true, poles: ["partenaires"] },
-  { group: "Planifier", path: "/permanences", label: "Animations", can: () => true, poles: ["animateurs_benevoles"] },
-  { group: "Planifier", path: "/repas", label: "Buvette & catering", can: () => true, poles: ["buvette_catering"] },
-  { group: "Jour J", path: "/terrain", label: "Sur le terrain", can: () => true, poles: [] },
-  { group: "Jour J", path: "/accueil", label: "Accueil (entrées)", can: () => true, poles: [] },
-  { group: "Jour J", path: "/presences", label: "Présences", can: () => isAdmin() || hasPole("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
-  { group: "Après", path: "/bilan", label: "Bilan", can: () => isAdmin(), poles: [] },
-  { group: "Mon espace", path: "/terrain/moi", label: "Mon planning", can: () => true, poles: [] },
-  { group: "Mon espace", path: "/mes-competences", label: "Mes compétences", can: () => true, poles: [] },
+  { group: "Pilotage", path: "/", label: "Tableau de bord", can: tous, poles: [] },
+  { group: "Préparer", path: "/organismes", label: "Organismes", can: pour("partenaires", "jeux_editeurs", "sponsors", "communication", "logistique_securite"), poles: ["partenaires", "jeux_editeurs", "sponsors", "communication"] },
+  { group: "Préparer", path: "/jeux", label: "Jeux", can: tous, poles: ["jeux_editeurs"] },
+  { group: "Préparer", path: "/benevoles", label: "Bénévoles", can: pour("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
+  { group: "Préparer", path: "/competences", label: "Compétences (équipe)", can: pour("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
+  { group: "Préparer", path: "/subventions", label: "Subventions", can: pour("sponsors"), poles: ["sponsors"] },
+  { group: "Préparer", path: "/inscriptions", label: "Inscriptions reçues", can: pour("partenaires", "animateurs_benevoles"), poles: ["partenaires", "animateurs_benevoles"] },
+  { group: "Préparer", path: "/communication", label: "Communication", can: pour("communication"), poles: ["communication"] },
+  { group: "Préparer", path: "/intergeneration", label: "Intergénérationnel", can: pour("intergenerationnelle"), poles: ["intergenerationnelle"] },
+  { group: "Planifier", path: "/plan", label: "Plan des salles", can: tous, poles: ["logistique_securite", "partenaires"] },
+  { group: "Planifier", path: "/repartition", label: "Répartition tables", can: pour("partenaires", "logistique_securite"), poles: ["partenaires"] },
+  { group: "Planifier", path: "/permanences", label: "Animations", can: tous, poles: ["animateurs_benevoles"] },
+  { group: "Planifier", path: "/repas", label: "Buvette & catering", can: pour("buvette_catering"), poles: ["buvette_catering"] },
+  { group: "Jour J", path: "/terrain", label: "Sur le terrain", can: tous, poles: [] },
+  { group: "Jour J", path: "/accueil", label: "Accueil (entrées)", can: tous, poles: [] },
+  { group: "Jour J", path: "/presences", label: "Présences", can: pour("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
+  { group: "Après", path: "/bilan", label: "Bilan", can: () => isAdmin() || session.poles.length > 0, poles: [] },
+  { group: "Mon espace", path: "/terrain/moi", label: "Mon planning", can: tous, poles: [] },
+  { group: "Mon espace", path: "/mes-infos", label: "Mes infos", can: tous, poles: [] },
+  { group: "Mon espace", path: "/mes-competences", label: "Mes compétences", can: tous, poles: [] },
   { group: "Réglages", path: "/editions", label: "Éditions", can: () => isAdmin(), poles: [] },
   { group: "Réglages", path: "/admin", label: "Administration", can: () => isAdmin(), poles: [] },
 ];

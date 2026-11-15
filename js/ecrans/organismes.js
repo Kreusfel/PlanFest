@@ -177,6 +177,7 @@ function listView() {
         <input id="f-q" class="grow" placeholder="Rechercher…" value="${esc(filt.q)}">
         <select id="f-statut">${statutOpts}</select>
         <button class="btn small${filt.relance ? " primary" : ""}" id="f-relance">À relancer</button>
+        <button class="btn small" id="f-emails" title="Adresses des organismes affichés (filtres compris)">Copier les e-mails</button>
         ${scope === "partenaire" ? `<button class="btn small${filt.dossier ? " primary" : ""}" id="f-dossier" title="Confirmés sans convention ou sans assurance">Dossier incomplet (${list.filter((x) => (x.roles || []).includes("partenaire") && x.statut === "confirme" && !dossierComplet(x)).length})</button>` : ""}
       </div>
       <div class="scroll"><table class="data-table">
@@ -302,6 +303,15 @@ function editeurJeuxBlock(oe) {
     <p class="msg" id="je-msg"></p></div>`;
 }
 
+
+// Copie une liste d'e-mails (séparés par des virgules) pour un envoi groupé en copie cachée.
+async function copierEmails(emails) {
+  const liste = [...new Set(emails.map((e) => (e || "").split(/[\/,;\s]+/)[0].trim().toLowerCase()).filter((e) => e.includes("@")))];
+  if (!liste.length) { toast("Aucune adresse e-mail dans cette liste."); return; }
+  try { await navigator.clipboard.writeText(liste.join(", ")); toast(`${liste.length} adresse(s) copiée(s) : colle-les en « Cci » de ton message.`, "ok"); }
+  catch { prompt("Copie ces adresses :", liste.join(", ")); }
+}
+
 /* ---------- câblage ---------- */
 function wireOnce() {
   if (root.__orgWired) return;
@@ -326,6 +336,7 @@ function onClick(e) {
   if (t.closest("#add-jeu-toggle")) { const row = root.querySelector(".add-jeu-row"); if (row) row.style.display = "flex"; return; }
   if (t.closest("#add-jeu-go")) return addJeu();
   if (t.closest("#f-relance")) { filt.relance = !filt.relance; return go(); }
+  if (t.closest("#f-emails")) return copierEmails(filtered().map((oe) => oe.organismes.contact_email));
   if (t.closest("#f-dossier")) { filt.dossier = !filt.dossier; return go(); }
   const openRow = t.closest("[data-open]");
   if (openRow) { view = { mode: "fiche", id: openRow.dataset.open }; return go(); }

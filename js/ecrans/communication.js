@@ -5,7 +5,7 @@
 //    logos d'organismes à récupérer.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
-import { esc, refocus, toast } from "../ui/util.js";
+import { esc, refocus, toast, safeUrl } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { qrSVG } from "../export/qr.js";
 import { parseCSV, norm } from "../ui/csv.js";
@@ -25,7 +25,7 @@ export async function render(container) {
     supa.from("comm_contacts").select("*").order("type").order("nom"),
     supa.from("comm_envois").select("contact_id,statut").eq("edition_id", store.editionId),
     supa.from("editions").select("id,nom,presentation,lieu,programme_publie").eq("id", store.editionId).single(),
-    supa.from("organisme_editions").select("id,logo_url,statut,roles,organismes(nom)").eq("edition_id", store.editionId).eq("statut", "confirme"),
+    supa.from("organisme_editions").select("id,logo_url,statut,roles,organismes(nom,site)").eq("edition_id", store.editionId).eq("statut", "confirme"),
   ]);
   contacts = cc.data || [];
   envois = new Map((ce.data || []).map((r) => [r.contact_id, r.statut]));
@@ -115,8 +115,14 @@ function csvView() {
 function publicTab() {
   const lien = `${location.origin}${location.pathname}#/public/programme/${edRow.id}`;
   const pub = !!edRow.programme_publie;
+  // Saisie directe du lien du logo (pôle Communication, migration 045).
   const logos = orgsNoLogo.length
-    ? `<ul class="reg-list">${orgsNoLogo.map((o) => `<li>${esc(o.organismes?.nom || "?")}</li>`).join("")}</ul>`
+    ? `<div class="scroll"><table class="data-table"><tbody>${orgsNoLogo.map((o) => {
+        const site = safeUrl(o.organismes?.site);
+        return `<tr><td><b>${esc(o.organismes?.nom || "?")}</b>${site ? ` <a class="link" href="${esc(site)}" target="_blank" rel="noopener">site</a>` : ""}</td>
+          <td><div class="lier-bgg"><input data-logo="${o.id}" placeholder="Lien de l'image du logo (https://…)" aria-label="Lien du logo de ${esc(o.organismes?.nom || "")}"${canWrite() ? "" : " disabled"}>
+          ${canWrite() ? `<button class="btn small" data-logosave="${o.id}">Enregistrer</button>` : ""}</div></td></tr>`;
+      }).join("")}</tbody></table></div>`
     : `<p class="muted">Tous les organismes confirmés ont un logo. 🎉</p>`;
   return `
     <div class="card"><div class="ihead"><h3>Programme public</h3>
@@ -139,7 +145,7 @@ function publicTab() {
 
     <div class="card"><div class="ihead"><h3>Logos à récupérer</h3><span class="muted">${orgsNoLogo.length}</span></div>
       ${logos}
-      <p class="mini">Organismes confirmés sans logo. À compléter sur leur fiche (page Organismes).</p></div>`;
+      <p class="mini">Organismes confirmés sans logo. Colle le lien d'une image en ligne (clic droit sur le logo du site → copier l'adresse de l'image).</p></div>`;
 }
 
 /* ---------- câblage ---------- */
@@ -163,6 +169,7 @@ function wire() {
   const pt = root.querySelector("#pub-toggle"); if (pt) pt.onclick = togglePub;
   const cl = root.querySelector("#copy-lien"); if (cl) cl.onclick = () => copy(`${location.origin}${location.pathname}#/public/programme/${edRow.id}`, "pub-msg");
   const ps = root.querySelector("#pres-save"); if (ps) ps.onclick = savePres;
+  root.querySelectorAll("[data-logosave]").forEach((b) => (b.onclick = () => saveLogo(b.dataset.logosave)));
 }
 
 async function copy(txt, msgId) {
@@ -261,6 +268,15 @@ async function togglePub() {
   const { error } = await supa.rpc("publier_edition", { p_edition: store.editionId, p_publier: publier });
   if (error) { if (m) m.textContent = "Erreur : " + error.message; return; }
   edRow.programme_publie = publier; draw();
+}
+async function saveLogo(id) {
+  const url = (root.querySelector(`[data-logo="${id}"]`)?.value || "").trim();
+  if (!/^https?:\/\//i.test(url)) { toast("Colle un lien qui commence par http:// ou https://"); return; }
+  const { error } = await supa.rpc("maj_logo_organisme", { p_organisme_edition: id, p_url: url });
+  if (error) { toast("Erreur : " + error.message); return; }
+  orgsNoLogo = orgsNoLogo.filter((o) => o.id !== id);
+  draw();
+  toast("Logo enregistré.", "ok");
 }
 async function savePres() {
   const pres = root.querySelector("#pres").value || null;
