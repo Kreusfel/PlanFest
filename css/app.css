@@ -452,3 +452,5 @@ input[type=color]{padding:3px;height:44px}
 .pub-infos-dates{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
 .pub-infos-lieu{margin:8px 0 0}
 .pub-chk{margin:6px 0}
+.scan-form{display:flex;gap:6px;align-items:center}
+.scan-form input{width:150px;margin:0}

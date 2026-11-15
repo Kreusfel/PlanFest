@@ -32,7 +32,7 @@ const bggEditeurs = new Map();                 // jeu_id → éditeurs proposés
 let tab = "festival", mode = "list", ficheId = null;
 let filt = { q: "", origine: "", usage: "", categorie: "", editeur: "", sansAnim: false };
 let ludoQ = "", ludoNonDecides = false;
-let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "" };
+let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "", ean: "" };  // ean : code-barre inconnu à associer
 let csvMsg = "";
 
 const canWrite = () => isAdmin() || hasPole("jeux_editeurs");
@@ -45,6 +45,8 @@ const numOrNull = (v) => { const n = parseInt(v, 10); return isNaN(n) ? null : n
 // Nom comparable (même règle que nom_comparable en base) : minuscules, sans accents ni ponctuation.
 const comparable = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const f = (l, inner) => `<label>${l}${inner}</label>`;
+const chiffres = (v) => String(v || "").replace(/\D/g, "");
+const parEan = (code) => [...jeux.values()].find((j) => j.ean && j.ean === code);
 const meta = (j) => [(j.joueurs_min || j.joueurs_max) ? `${j.joueurs_min || "?"}–${j.joueurs_max || "?"} j.` : "",
   j.duree_min ? `${j.duree_min} min` : "", j.age_min ? `${j.age_min}+` : ""].filter(Boolean).join(" · ");
 
@@ -244,6 +246,7 @@ function ludoView() {
     <div class="filters">
       <input id="l-q" class="grow" placeholder="Rechercher un titre…" value="${esc(ludoQ)}" aria-label="Rechercher dans la ludothèque">
       <button class="btn small${ludoNonDecides ? " primary" : ""}" id="l-nd">Non décidés (${nd})</button>
+      ${w ? `<form id="scan-form" class="scan-form"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre" aria-label="Scanner ou taper un code-barre"><button class="btn small" type="submit">OK</button></form>` : ""}
       ${w ? `<button class="btn small" id="l-tri">Trier rapidement</button><button class="btn small" id="l-csv">Import CSV</button>` : ""}
     </div>
     <p class="mini">Pour ce festival : <b>${c.oui}</b> oui · <b>${c.bar}</b> bar à jeux · <b>${c.non}</b> non. « Oui » et « Bar » ajoutent le jeu à l'onglet Festival.</p>
@@ -260,6 +263,7 @@ function triView() {
 // Jeux du catalogue dont le titre ressemble à la recherche (ou au même numéro BGG).
 function trouvesLocaux() {
   const q = comparable(ajout.q);
+  if (/^\d{6,14}$/.test(ajout.q.trim())) { const j = parEan(ajout.q.trim()); return j ? [j] : []; }
   const bggIds = new Set((ajout.bgg || []).map((r) => r.bgg_id).filter(Boolean));
   if (!q && !bggIds.size) return [];
   return [...jeux.values()].filter((j) => (q.length >= 2 && comparable(j.titre).includes(q)) || (j.bgg_id && bggIds.has(j.bgg_id)))
@@ -267,6 +271,8 @@ function trouvesLocaux() {
 }
 function etatLocal(j) {
   const je = sel.get(j.id);
+  if (ajout.ean && !j.ean) return { txt: je ? "Déjà au festival" : (j.ludotheque ? "Dans la ludothèque" : "Jeu d'éditeur connu"),
+    btn: `<button class="btn small primary" data-associer="${j.id}">C'est ce jeu</button><button class="btn small" data-open="${j.id}">Ouvrir</button>` };
   if (je) return { txt: "Déjà au festival", btn: `<button class="btn small" data-open="${j.id}">Ouvrir</button>` };
   return { txt: j.ludotheque ? "Dans la ludothèque, pas encore pris pour ce festival" : "Déjà connu (jeu d'éditeur), pas dans ce festival",
     btn: `<button class="btn small primary" data-aufestival="${j.id}">Ajouter au festival</button><button class="btn small" data-open="${j.id}">Ouvrir</button>` };
@@ -293,6 +299,11 @@ function ajoutView() {
     <div class="head-actions"><button class="btn" id="retour">← Jeux</button></div></div>
     <div class="card" style="max-width:820px">
       ${origineChoix("a")}
+      <form id="scan-form" class="jeux-filters">
+        <input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre (douchette ou clavier)" value="${esc(ajout.ean)}" aria-label="Code-barre">
+        <button class="btn" type="submit">Chercher le code</button>
+      </form>
+      ${ajout.ean ? `<p class="sync-warn">Code ${esc(ajout.ean)} inconnu : cherche le jeu par son nom ci-dessous. Le code sera enregistré avec le jeu choisi.</p>` : ""}
       <form id="a-form" class="jeux-filters">
         <input id="a-q" placeholder="Nom du jeu…" value="${esc(ajout.q)}" aria-label="Nom du jeu" autocomplete="off">
         <button class="btn primary" type="submit">Chercher sur BGG</button>
@@ -339,7 +350,7 @@ function csvView() {
       <p class="msg" id="csv-msg">${esc(csvMsg)}</p>
       <hr>
       <p class="mini"><b>Colonnes reconnues</b> (1ʳᵉ ligne = en-têtes, seul <b>titre</b> est obligatoire) :
-        titre · annee · categorie (nom exact) · joueurs_min · joueurs_max · duree_min · age_min · image_url · bgg_id.
+        titre · annee · categorie (nom exact) · joueurs_min · joueurs_max · duree_min · age_min · image_url · bgg_id · ean (code-barre).
         Un jeu déjà connu (même titre, ou même numéro BGG) n'est pas recréé : il est simplement marqué « jeu de l'asso ».</p>
     </div>`;
 }
@@ -370,6 +381,7 @@ function ficheView() {
         ${w ? ajoutEditeur(j) : ""}
         <div class="row2">${f("Joueurs min", `<input type="number" data-j="joueurs_min" value="${j.joueurs_min ?? ""}"${ro}>`)}${f("Joueurs max", `<input type="number" data-j="joueurs_max" value="${j.joueurs_max ?? ""}"${ro}>`)}</div>
         <div class="row2">${f("Durée (min)", `<input type="number" data-j="duree_min" value="${j.duree_min ?? ""}"${ro}>`)}${f("Âge min", `<input type="number" data-j="age_min" value="${j.age_min ?? ""}"${ro}>`)}</div>
+        ${f("Code-barre (EAN)", `<input data-j="ean" inputmode="numeric" value="${esc(j.ean || "")}" placeholder="Scanner ou taper le code"${ro}>`)}
         ${j.bgg_id ? "" : f("Image (lien)", `<input data-j="image_url" value="${esc(j.image_url || "")}" placeholder="https://…"${ro}>`)}
         ${w ? `<button class="btn small danger" id="suppr-jeu" style="margin-top:10px">Supprimer ce jeu du catalogue</button>` : ""}
         ${BGG}
@@ -434,7 +446,7 @@ async function onClick(e) {
     if (mode === "tri") { await load(); tab = "ludo"; }  // le tri a pu changer la sélection
     mode = "list"; return go();
   }
-  if (t.closest("#ajouter")) { ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "" }; mode = "ajout"; return go(); }
+  if (t.closest("#ajouter")) { ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: "" }; mode = "ajout"; return go(); }
   if (t.closest("#to-manuel")) { mode = "manuel"; return go(); }
   if (t.closest("#to-ajout")) { mode = "ajout"; return go(); }
   if (t.closest("#to-csv") || t.closest("#l-csv")) { csvMsg = ""; mode = "csv"; return go(); }
@@ -449,12 +461,13 @@ async function onClick(e) {
   if (t.closest("#retirer")) return retirerDuFestival(jeux.get(ficheId));
   if (t.closest("#suppr-jeu")) return supprimerJeu(jeux.get(ficheId));
   if (t.closest("#new-ed-go")) return ajouterEditeur(root.querySelector("#new-ed")?.value);
-  const b = t.closest("[data-choix],[data-aufestival],[data-bgg],[data-addeditor],[data-open]");
+  const b = t.closest("[data-choix],[data-aufestival],[data-bgg],[data-addeditor],[data-associer],[data-open]");
   if (!b) return;
   if (b.dataset.choix) { const [id, c] = b.dataset.choix.split("|"); return choisir(id, c); }
-  if (b.dataset.aufestival) return ajouterAuFestival(jeux.get(b.dataset.aufestival));
+  if (b.dataset.aufestival) { const j = jeux.get(b.dataset.aufestival); if (mode === "ajout") await memoriserEan(j); return ajouterAuFestival(j); }
   if (b.dataset.bgg != null) return ajouterDepuisBgg(ajout.bgg?.[+b.dataset.bgg]);
   if (b.dataset.addeditor) return ajouterEditeur(b.dataset.addeditor);
+  if (b.dataset.associer) { const j = jeux.get(b.dataset.associer); await memoriserEan(j); return apresCreation(j); }
   if (b.dataset.open) { ficheId = b.dataset.open; mode = "fiche"; window.scrollTo(0, 0); return go(); }
 }
 function onInput(e) {
@@ -485,9 +498,30 @@ function onChange(e) {
   if (t.id === "csv-file") { const fl = t.files[0]; if (fl) fl.text().then((x) => { const ta = root.querySelector("#csv-text"); if (ta) ta.value = x; }); }
 }
 function onSubmit(e) {
+  if (e.target.id === "scan-form") { e.preventDefault(); return scanner(root.querySelector("#scan")?.value); }
   if (e.target.id !== "a-form") return;
   e.preventDefault();
   chercherBgg();
+}
+
+/* ---------- code-barre ---------- */
+// Code connu → fiche du jeu. Inconnu → recherche par nom ; le code sera enregistré avec
+// le jeu choisi (une douchette tape les chiffres puis « Entrée », comme un clavier).
+function scanner(v) {
+  const code = chiffres(v);
+  if (code.length < 6) { toast("Code-barre trop court."); return; }
+  const j = parEan(code);
+  if (j) { ficheId = j.id; mode = "fiche"; window.scrollTo(0, 0); go(); if (!sel.has(j.id)) toast(`« ${j.titre} » : pas encore au festival.`, "warn"); return; }
+  if (mode !== "ajout") ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: code };
+  else ajout.ean = code;
+  mode = "ajout"; go();
+  root.querySelector("#a-q")?.focus();
+}
+async function memoriserEan(j) {
+  if (!j || !ajout.ean || j.ean) return;
+  const { error } = await supa.from("jeux").update({ ean: ajout.ean }).eq("id", j.id);
+  if (error) { toast(error.code === "23505" ? "Ce code-barre est déjà associé à un autre jeu." : "Code-barre non enregistré : " + error.message); return; }
+  j.ean = ajout.ean; ajout.ean = "";
 }
 
 /* ---------- actions ---------- */
@@ -534,6 +568,7 @@ async function supprimerJeu(j) {
 // Après création d'un jeu : selon l'origine, le prendre pour le festival.
 async function apresCreation(j) {
   jeux.set(j.id, j);
+  await memoriserEan(j);
   if (sel.has(j.id)) { /* déjà au festival */ }
   else if (j.ludotheque && ajout.prendre) await choisir(j.id, "oui");
   else if (!j.ludotheque) await ajouterAuFestival(j);
@@ -638,7 +673,9 @@ async function enregistrer() {
   const jPatch = { titre, annee: numOrNull(g("annee").value),
     joueurs_min: numOrNull(g("joueurs_min").value), joueurs_max: numOrNull(g("joueurs_max").value),
     duree_min: numOrNull(g("duree_min").value), age_min: numOrNull(g("age_min").value),
-    categorie_id: g("categorie_id").value || null, editeur_id: g("editeur_id").value || null, ludotheque: asso };
+    categorie_id: g("categorie_id").value || null, editeur_id: g("editeur_id").value || null, ludotheque: asso,
+    ean: chiffres(g("ean")?.value) || null };
+  if (jPatch.ean && !/^\d{6,14}$/.test(jPatch.ean)) return dire("Code-barre : 6 à 14 chiffres.");
   const imgIn = g("image_url");
   if (imgIn) { const v = imgIn.value.trim(); jPatch.image_url = /^https?:\/\//i.test(v) ? v : null; }
   let ePatch = null;
@@ -654,6 +691,7 @@ async function enregistrer() {
     supa.from("jeux").update(jPatch).eq("id", j.id),
     je ? supa.from("jeux_editions").update(ePatch).eq("id", je.id) : Promise.resolve({ error: null }),
   ]);
+  if (r1.error?.code === "23505") return dire("Ce code-barre est déjà associé à un autre jeu.");
   if (r1.error || r2.error) return dire("Erreur : " + (r1.error || r2.error).message);
   // Jeu devenu « de l'asso » et présent au festival : le tri le reflète (Oui ou Bar).
   if (asso && je && !choix.has(j.id)) {
@@ -677,6 +715,7 @@ const COLS = {
   categorie: ["categorie", "category", "cat"], joueurs_min: ["joueursmin", "min", "minplayers"],
   joueurs_max: ["joueursmax", "max", "maxplayers"], duree_min: ["dureemin", "duree", "duration", "playingtime", "temps"],
   age_min: ["agemin", "age", "minage"], image_url: ["imageurl", "image", "img"], bgg_id: ["bggid", "bgg"],
+  ean: ["ean", "ean13", "upc", "codebarre", "codebarres", "gencod"],
 };
 async function importCsv() {
   if (!canWrite()) return;
@@ -689,18 +728,19 @@ async function importCsv() {
   const parTitre = new Map([...jeux.values()].map((j) => [comparable(j.titre), j]));
   const parBgg = new Map([...jeux.values()].filter((j) => j.bgg_id).map((j) => [j.bgg_id, j]));
   const catParNom = new Map(cats.map((c) => [norm(c.nom), c.id]));
-  const nouveaux = [], aMarquer = new Set(); let vides = 0;
+  const nouveaux = [], aMarquer = new Set(), eansVus = new Set(); let vides = 0;
   for (let r = 1; r < rows.length; r++) {
     const get = (k) => (idx[k] != null ? (rows[r][idx[k]] || "").trim() : "");
     const titre = get("titre"); if (!titre) { vides++; continue; }
     const bgg = numOrNull(get("bgg_id"));
-    const connu = (bgg && parBgg.get(bgg)) || parTitre.get(comparable(titre));
+    const ean = /^\d{6,14}$/.test(chiffres(get("ean"))) ? chiffres(get("ean")) : null;
+    const connu = (ean && parEan(ean)) || (bgg && parBgg.get(bgg)) || parTitre.get(comparable(titre));
     if (connu) { if (!connu.ludotheque) aMarquer.add(connu.id); continue; }
     parTitre.set(comparable(titre), { id: null, titre });
     const img = get("image_url");
     nouveaux.push({ titre, annee: numOrNull(get("annee")), joueurs_min: numOrNull(get("joueurs_min")),
       joueurs_max: numOrNull(get("joueurs_max")), duree_min: numOrNull(get("duree_min")), age_min: numOrNull(get("age_min")),
-      image_url: /^https?:\/\//i.test(img) ? img : null, bgg_id: bgg,
+      image_url: /^https?:\/\//i.test(img) ? img : null, bgg_id: bgg, ean: ean && !eansVus.has(ean) ? (eansVus.add(ean), ean) : null,
       categorie_id: catParNom.get(norm(get("categorie"))) || null, ludotheque: true });
   }
   if (!nouveaux.length && !aMarquer.size) return m(`Rien à importer : tous les jeux sont déjà dans la ludothèque${vides ? ` (${vides} ligne(s) sans titre)` : ""}.`);
