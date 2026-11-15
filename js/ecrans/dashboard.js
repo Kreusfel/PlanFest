@@ -21,12 +21,12 @@ const LABELS = {
   dossiers_attente: "Dossiers en attente", echeances_30j: "Échéances < 30 j",
   tables_non_verifiees: "Tables non vérifiées", benevoles: "Bénévoles", animateurs: "Animateurs",
   alertes: "Alertes parties", confirmes_sans_logo: "Confirmés sans logo", programme_publie: "Programme publié",
-  ecoles_confirmees: "Écoles confirmées", etablissements_confirmes: "Établissements confirmés",
+  contreparties_a_faire: "Contreparties à faire", ecoles_confirmees: "Écoles confirmées", etablissements_confirmes: "Établissements confirmés",
   personnes_attendues: "Personnes attendues", sam: "Repas samedi", dim: "Repas dimanche",
 };
 // Indicateurs où un nombre > 0 signale une action à mener (teinte d'alerte)
 const ALERTE_SI_POSITIF = new Set(["a_relancer", "tables_non_attribuees", "editeurs_sans_reponse",
-  "dossiers_attente", "echeances_30j", "tables_non_verifiees", "alertes", "confirmes_sans_logo"]);
+  "dossiers_attente", "echeances_30j", "tables_non_verifiees", "alertes", "confirmes_sans_logo", "contreparties_a_faire"]);
 
 const ROLE_SHORT = { editeur: "Éditeur", partenaire: "Partenaire", sponsor: "Sponsor" };
 const STALE_JOURS = 14; // sans contact depuis plus de N jours = en retard

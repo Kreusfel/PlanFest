@@ -5,6 +5,7 @@ import { supa } from "../supabase.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
 import { esc, plur, aujourdhui, toast } from "../ui/util.js";
+import { blocContreparties, actionContrepartie } from "../ui/contreparties.js";
 
 const ROLES = [["partenaire", "Partenaire"], ["editeur", "Éditeur"], ["sponsor", "Sponsor"]];
 const STATUTS = [["invite", "À contacter"], ["relance", "À relancer"], ["confirme", "Confirmé"], ["refuse", "Refusé"]];
@@ -20,6 +21,7 @@ const JE_USAGE_LBL = { animation: "Animation", bar: "Bar à jeux", tombola: "Tom
 
 const today = aujourdhui;
 
+let contreparties = [];  // contreparties de l'édition (migration 052)
 let root, list = [], regimes = {}, jeuxEd = {}, catalogue = [], placedTables = {}, loadErr = "";
 let scope = null, newPreset = null;
 let filt = { q: "", statut: "", relance: false, dossier: false };
@@ -67,6 +69,8 @@ async function load() {
   });
   const cat = await supa.from("jeux").select("id, titre, editeur_id");
   catalogue = cat.data ?? [];
+  const cpq = await supa.from("contreparties").select("*").eq("edition_id", store.editionId).order("cree_le");
+  contreparties = cpq.data ?? [];
   // Tables déjà placées sur le plan par organisme-édition.
   placedTables = {};
   const pt = await supa.from("elements").select("organisme_edition_id")
@@ -111,7 +115,8 @@ function orgTr(oe) {
     <td class="muted">${oe.dernier_contact ? esc(oe.dernier_contact) : "jamais"}</td>
     <td class="muted">${esc(extra)}</td>
     ${scope === "partenaire" && view.mode === "list" ? `<td>${dossierTags(oe)}</td>` : ""}
-    ${scope === "sponsor" && view.mode === "list" ? `<td>${!oe.contreparties ? '<span class="muted">—</span>' : oe.contreparties_faites ? '<span class="tag ok">faites</span>' : '<span class="tag warn">à faire</span>'}</td>` : ""}
+    ${scope === "sponsor" && view.mode === "list" ? (() => { const cs = contreparties.filter((c) => c.organisme_id === oe.organisme_id), af = cs.filter((c) => !c.faite).length;
+      return `<td>${!cs.length ? '<span class="muted">—</span>' : af ? `<span class="tag warn">${af} à faire</span>` : '<span class="tag ok">faites</span>'}</td>`; })() : ""}
   </tr>`;
 }
 
@@ -267,8 +272,7 @@ function ficheView() {
         <div data-sec="sponsor"${isS ? "" : ' style="display:none"'}>
           <h3>Sponsor</h3>
           ${field("Nature de l'aide", `<input data-e="nature_aide" value="${esc(oe.nature_aide || "")}"${ro}>`)}
-          ${field("Contreparties promises", `<textarea data-e="contreparties" placeholder="ex. logo sur l'affiche, mention au micro, stand…"${ro}>${esc(oe.contreparties || "")}</textarea>`)}
-          ${field("", `<span class="chk-inline"><input type="checkbox" data-e="contreparties_faites"${oe.contreparties_faites ? " checked" : ""}${ro}> Contreparties faites</span>`)}
+
         </div>
         <div data-sec="regime"${isP ? "" : ' style="display:none"'}>
           ${field("Régime / allergies (repas)", `<input data-regime value="${esc(regimes[oe.id] || "")}" placeholder="ex. 1 sans gluten, 2 végétariens…"${ro}>`)}
@@ -277,6 +281,7 @@ function ficheView() {
       </div></div>
     </div>
     <div data-sec="editeur-jeux"${isE ? "" : ' style="display:none"'}>${editeurJeuxBlock(oe)}</div>
+    <div style="margin-top:14px">${blocContreparties(contreparties.filter((c) => c.organisme_id === oe.organisme_id), canWrite(), "Contreparties dues")}</div>
     <p class="mini" style="margin-top:14px">La couleur sur le plan n'apparaît que si le rôle Partenaire est coché.</p>
     <p class="msg" id="o-msg"></p>`;
 }
@@ -302,7 +307,9 @@ function editeurJeuxBlock(oe) {
     ${canAdd ? `<div class="add-jeu-row" style="display:none">
       <select id="add-jeu"><option value="">— jeu du catalogue —</option>${dispo.map((j) => `<option value="${j.id}">${esc(j.titre)}</option>`).join("")}</select>
       <button class="btn small primary" id="add-jeu-go">Ajouter</button></div>` : ""}
-    <p class="mini">Statuts : à obtenir, demandé, obtenu. Usages : animation, bar à jeux, tombola. Modifiable dans « Jeux ».</p>
+    <p class="mini">Statuts des jeux : à obtenir, demandé, obtenu — à suivre dans <a href="#/jeux/obtenir">Jeux → À obtenir</a>.
+      Le statut de l'éditeur suit automatiquement : contact noté quand ses jeux lui sont demandés, « Confirmé » quand un jeu est obtenu
+      auprès de lui ; le passer à « Refusé » renvoie ses jeux demandés dans « À chercher ailleurs ».</p>
     <p class="msg" id="je-msg"></p></div>`;
 }
 
@@ -324,8 +331,18 @@ function wireOnce() {
   root.addEventListener("change", onChange);
 }
 function backMode() { return scope ? "list" : "hub"; }
+// Contexte d'une contrepartie ajoutée depuis la fiche : due à cet organisme.
+function contexteContrepartie() {
+  const oe = list.find((x) => x.id === view.id); if (!oe) return null;
+  return { edition_id: store.editionId, beneficiaire: oe.organismes.nom, organisme_id: oe.organisme_id,
+    origine: (oe.roles || []).includes("sponsor") ? "sponsor" : (oe.roles || []).includes("partenaire") ? "partenaire" : "autre" };
+}
 function onClick(e) {
   const t = e.target;
+  if (view.mode === "fiche" && t.closest("[data-cpfait],[data-cpdel],[data-cpadd]")) {
+    actionContrepartie(t, contreparties, contexteContrepartie).then((ok) => { if (ok) go(); });
+    return;
+  }
   if (t.matches("[data-color]")) {
     const box = t.closest(".swatches");
     box.querySelector("input").value = t.dataset.color;
@@ -430,7 +447,7 @@ async function saveFiche() {
     electricite: getE("electricite").checked,
     convention_recue: getE("convention_recue").checked, assurance_recue: getE("assurance_recue").checked,
     nature_aide: getE("nature_aide").value || null, logo_url: getE("logo_url").value || null,
-    contreparties: getE("contreparties").value || null, contreparties_faites: getE("contreparties_faites").checked,
+
     notes: getE("notes").value || null };
   const regime = root.querySelector("[data-regime]")?.value || "";
   const [r1, r2, r3] = await Promise.all([

@@ -14,6 +14,7 @@ import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
 import { esc, plur, toast, aujourdhui } from "../ui/util.js";
 import { bonRestitution } from "../export/restitution.js";
+import { blocContreparties, actionContrepartie } from "../ui/contreparties.js";
 import { parseCSV, norm } from "../ui/csv.js";
 import * as swipe from "./selection-swipe.js";
 
@@ -45,10 +46,11 @@ let jeux = new Map();      // catalogue : id → jeu
 let sel = new Map();       // sélection de l'édition : jeu_id → ligne jeux_editions
 let choix = new Map();     // tri de la ludothèque : jeu_id → oui | bar | non
 let preteursPasses = [];  // prêteurs déjà saisis (toutes éditions), pour les suggestions
+let contreparties = [];   // contreparties demandées (édition) ; celles d'un jeu ont jeu_edition_id
 let ecoles = [];           // écoles qui viennent au festival (une malle chacune) : { contact_id, nom, demi_journee }
 let malles = [];           // malles des écoles : { id, jeu_id, malle } (un jeu peut être dans plusieurs)
 let cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = [];
-let edIds = new Set(), edIdsIci = new Set();   // organismes éditeurs (toutes éditions / cette édition)
+let edIds = new Set(), edIdsIci = new Set(), edStatut = new Map();   // organismes éditeurs (toutes éditions / cette édition)
 const bggEditeurs = new Map();                 // jeu_id → éditeurs proposés par BGG
 let tab = "festival", mode = "list", ficheId = null;
 let filt = { q: "", origine: "", prov: "", usage: "", categorie: "", editeur: "", sansAnim: false };
@@ -121,9 +123,11 @@ async function load() {
     supa.rpc("animateurs_edition", { p_edition: ed }),
     Promise.resolve(null),
     supa.from("elements").select("id, numero, salle_id, salles(nom)").eq("edition_id", ed).eq("kind", "table"),
-    supa.from("organisme_editions").select("organisme_id, edition_id").contains("roles", ["editeur"]),
+    supa.from("organisme_editions").select("organisme_id, edition_id, statut, dernier_contact").contains("roles", ["editeur"]),
     supa.from("malle_jeux").select("id, jeu_id, malle").eq("edition_id", ed),
   ]);
+  const cpq = await supa.from("contreparties").select("*").eq("edition_id", ed).order("cree_le");
+  contreparties = cpq.data ?? [];
   const ec = await supa.rpc("ecoles_festival", { p_edition: ed });
   ecoles = ec.data ?? [];
   const pp = await supa.from("jeux_editions").select("provenance_detail").eq("provenance", "pret").not("provenance_detail", "is", null);
@@ -140,6 +144,8 @@ async function load() {
   tables = (el.data ?? []).sort((a, b) => (parseInt(a.numero, 10) || 0) - (parseInt(b.numero, 10) || 0));
   edIds = new Set((oed.data ?? []).map((x) => x.organisme_id));
   edIdsIci = new Set((oed.data ?? []).filter((x) => x.edition_id === ed).map((x) => x.organisme_id));
+  // Statut de l'éditeur sur sa fiche (même donnée que l'écran Organismes, synchronisée en base).
+  edStatut = new Map((oed.data ?? []).filter((x) => x.edition_id === ed).map((x) => [x.organisme_id, x]));
 }
 // Après un changement du tri (le déclencheur en base ajoute / retire des jeux de la sélection).
 async function rechargerSelection() {
@@ -396,7 +402,9 @@ function obtenirView() {
   aDemander.forEach((je) => { const ed = groupeDe(je); if (!parEd.has(ed)) parEd.set(ed, []); parEd.get(ed).push(je); });
   const groupes = [...parEd.entries()].sort((a, b) => (a[0] ? orgNom(a[0]) : "zzz").localeCompare(b[0] ? orgNom(b[0]) : "zzz", "fr")).map(([ed, liste]) => {
     const org = orgs.find((o) => o.id === ed), titres = liste.map((je) => jeux.get(je.jeu_id).titre).sort((a, b) => a.localeCompare(b, "fr"));
-    return `<div class="card"><div class="ihead"><h3>${ed ? esc(orgNom(ed)) : "À chercher ailleurs"}</h3><span class="muted">${plur(liste.length, "jeu", "jeux")}</span></div>
+    const st = ed ? edStatut.get(ed) : null;
+    const stTxt = st ? `<span class="tag ${({ confirme: "ok", refuse: "bad" })[st.statut] || "warn"}">${esc(({ invite: "à contacter", relance: "à relancer", confirme: "confirmé", refuse: "refusé" })[st.statut] || st.statut)}${st.dernier_contact ? " · contacté le " + esc(st.dernier_contact) : ""}</span>` : "";
+    return `<div class="card"><div class="ihead"><h3>${ed ? `<a class="link" href="#/organismes/editeurs">${esc(orgNom(ed))}</a>` : "À chercher ailleurs"} ${stTxt}</h3><span class="muted">${plur(liste.length, "jeu", "jeux")}</span></div>
       ${org?.contact_email ? `<p class="mini">Contact : <a href="mailto:${esc(org.contact_email)}">${esc(org.contact_email)}</a></p>` : ed ? `<p class="mini">Pas d'e-mail sur la fiche de l'éditeur.</p>` : `<p class="mini">À demander à la ludothèque, à une boutique partenaire, ou à acheter.</p>`}
       <ul class="reg-list">${liste.map((je) => `<li class="clk" data-open="${je.jeu_id}">${esc(jeux.get(je.jeu_id).titre)}${je.notes ? ` <span class="muted">— ${esc(je.notes.split("\n").slice(-1)[0])}</span>` : ""}</li>`).join("")}</ul>
       <div class="head-actions" style="justify-content:flex-start">
@@ -605,6 +613,7 @@ function blocFestival(j, je, ro) {
       ${f("Notes", `<textarea data-e="notes"${ro}>${esc(je.notes || "")}</textarea>`)}
       ${ro ? "" : `<button class="btn small danger" id="retirer">Retirer du festival</button>`}
     </div>
+    ${!j.ludotheque ? blocContreparties(contreparties.filter((c) => c.jeu_edition_id === je.id), !ro, "Contreparties demandées en échange") : ""}
     ${estAnimation(je) ? `<div class="card"><h2>Animateurs</h2>${animRows}
       <p class="mini">Réponses données dans Compétences / Mes compétences.</p></div>` : ""}`;
 }
@@ -636,8 +645,21 @@ function wireOnce() {
 const msgEl = () => root.querySelector("#j-msg") || root.querySelector("#a-msg") || root.querySelector("#m-msg");
 const dire = (t) => { const m = msgEl(); if (m) m.textContent = t; };
 
+// Contexte d'une contrepartie ajoutée depuis la fiche d'un jeu : due à qui on l'a demandé.
+function contexteContrepartieJeu() {
+  const j = jeux.get(ficheId), je = sel.get(ficheId); if (!j || !je) return null;
+  let qui = (je.provenance_detail || (j.editeur_id ? orgNom(j.editeur_id) : "")).trim();
+  if (!qui) qui = (prompt("À qui doit-on cette contrepartie ?") || "").trim();
+  const org = j.editeur_id && qui === orgNom(j.editeur_id) ? j.editeur_id : null;
+  return { edition_id: store.editionId, beneficiaire: qui, organisme_id: org, origine: "jeu", jeu_edition_id: je.id };
+}
+
 async function onClick(e) {
   const t = e.target;
+  if (mode === "fiche" && t.closest("[data-cpfait],[data-cpdel],[data-cpadd]")) {
+    if (await actionContrepartie(t, contreparties, contexteContrepartieJeu)) go();
+    return;
+  }
   const tb = t.closest("[data-tab]");
   if (tb) { tab = tb.dataset.tab; mode = "list"; return go(); }
   if (t.closest("#retour")) {
@@ -778,6 +800,8 @@ async function marquerDemande(ed) {
   const { error } = await supa.from("jeux_editions").update({ statut: "demande", provenance_detail: aQui }).in("id", liste.map((je) => je.id));
   if (error) return toast("Erreur : " + error.message);
   liste.forEach((je) => { je.statut = "demande"; je.provenance_detail = aQui; });
+  // La base note le contact sur la fiche de l'éditeur : refléter ici sans recharger.
+  if (ed !== "?") { const st = edStatut.get(ed) || { statut: "invite" }; edStatut.set(ed, { ...st, dernier_contact: aujourdhui() }); edIdsIci.add(ed); }
   go();
   toast(`${plur(liste.length, "jeu demandé", "jeux demandés")} à ${aQui}.`, "ok");
 }

@@ -9,9 +9,11 @@ import { esc, refocus, toast, safeUrl } from "../ui/util.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { qrSVG } from "../export/qr.js";
 import { parseCSV, norm } from "../ui/csv.js";
+import { NATURES, ORIGINES, natureLbl, origineLbl, ligneContrepartie, formulaireContrepartie, actionContrepartie } from "../ui/contreparties.js";
 
 const STATUTS = [["a_faire", "À faire"], ["envoye", "Envoyé"], ["distribue", "Distribué"]];
 const TYPES = ["Mairie", "École", "Presse", "Commerce", "Association", "Autre"];
+let cps = [], orgsNoms = [], cpFiltre = { nature: "", origine: "" };  // contreparties (migration 052)
 let root, tab = "diffusion", mode = "list", contacts = [], envois = new Map(), edRow = null, orgsNoLogo = [];
 let q = "", filtType = "", csvMsg = "";
 const canWrite = () => isAdmin() || hasPole("communication");
@@ -31,16 +33,23 @@ export async function render(container) {
   envois = new Map((ce.data || []).map((r) => [r.contact_id, r.statut]));
   edRow = edr.data || {};
   orgsNoLogo = (oe.data || []).filter((o) => !o.logo_url && (o.roles || []).some((r) => ["partenaire", "sponsor", "editeur"].includes(r)));
+  const [cq, oq] = await Promise.all([
+    supa.from("contreparties").select("*, jeux_editions(jeux(titre))").eq("edition_id", store.editionId).order("echeance", { nullsFirst: false }),
+    supa.from("organisme_editions").select("organisme_id, organismes(nom)").eq("edition_id", store.editionId),
+  ]);
+  cps = cq.data || [];
+  orgsNoms = [...new Map((oq.data || []).filter((x) => x.organismes).map((x) => [x.organisme_id, x.organismes.nom])).entries()];
   draw();
 }
 
 function draw() {
   const subTabs = `<div class="utabs">
     <button data-tab="diffusion"${tab === "diffusion" ? ' class="on"' : ""}>Diffusion</button>
-    <button data-tab="public"${tab === "public" ? ' class="on"' : ""}>Public</button></div>`;
+    <button data-tab="public"${tab === "public" ? ' class="on"' : ""}>Public</button>
+    <button data-tab="contreparties"${tab === "contreparties" ? ' class="on"' : ""}>Contreparties${cps.filter((c) => !c.faite).length ? ` (${cps.filter((c) => !c.faite).length} à faire)` : ""}</button></div>`;
   root.innerHTML = `<div class="page-head"><div><h1>Communication</h1>
       <div class="sub">Carnet de diffusion & contenu public</div></div></div>
-    ${subTabs}${tab === "public" ? publicTab() : mode === "csv" ? csvView() : diffusionTab()}`;
+    ${subTabs}${tab === "public" ? publicTab() : tab === "contreparties" ? contrepartiesTab() : mode === "csv" ? csvView() : diffusionTab()}`;
   wire();
 }
 
@@ -149,7 +158,52 @@ function publicTab() {
 }
 
 /* ---------- câblage ---------- */
+/* ---------- Contreparties ---------- */
+// Toutes les contreparties dues (jeux donnés ou prêtés, sponsors, partenaires), à faire puis faites.
+const peutCp = () => isAdmin() || ["communication", "jeux_editeurs", "sponsors", "partenaires"].some((p) => hasPole(p));
+function contrepartiesTab() {
+  const w = peutCp();
+  const ok = (c) => (!cpFiltre.nature || c.nature === cpFiltre.nature) && (!cpFiltre.origine || c.origine === cpFiltre.origine);
+  const vues = cps.filter(ok);
+  const afaire = vues.filter((c) => !c.faite).sort((a, b) => (a.echeance || "9999").localeCompare(b.echeance || "9999"));
+  const faites = vues.filter((c) => c.faite);
+  const ligne = (c) => ligneContrepartie(c, w, true)
+    + (c.jeux_editions?.jeux?.titre || c.origine !== "autre" ? `<p class="mini cp-ctx">${esc(origineLbl(c.origine))}${c.jeux_editions?.jeux?.titre ? " · jeu « " + esc(c.jeux_editions.jeux.titre) + " »" : ""}</p>` : "");
+  const opt = (v, cur, l) => `<option value="${v}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
+  const ajout = w ? `<div class="card"><div class="ihead"><h3>Ajouter une contrepartie</h3></div>
+    <div class="filters" style="align-items:flex-end">
+      <label>Due à<input id="cp-benef" list="cp-benef-dl" placeholder="éditeur, sponsor, ludothèque…"></label>
+      <datalist id="cp-benef-dl">${orgsNoms.map(([, n]) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <label>En échange de<select id="cp-origine">${ORIGINES.map(([k, l]) => opt(k, "", l)).join("")}</select></label></div>
+    ${formulaireContrepartie()}
+    <p class="mini">Le plus simple : ajouter la contrepartie depuis la fiche du jeu ou de l'organisme concerné.</p></div>` : "";
+  return `<div class="card"><div class="filters">
+      <select id="cp-f-nature" aria-label="Type">${opt("", cpFiltre.nature, "Tous types")}${NATURES.map(([k, l]) => opt(k, cpFiltre.nature, l)).join("")}</select>
+      <select id="cp-f-origine" aria-label="En échange de">${opt("", cpFiltre.origine, "Toutes origines")}${ORIGINES.map(([k, l]) => opt(k, cpFiltre.origine, l)).join("")}</select>
+      <button class="btn small" id="cp-copier">Copier la liste à faire</button></div></div>
+    ${ajout}
+    <div class="card"><div class="ihead"><h3>À faire</h3><span class="tag ${afaire.length ? "warn" : "ok"}">${afaire.length}</span></div>
+      ${afaire.map(ligne).join("") || `<p class="muted">Rien à faire. 🎉</p>`}</div>
+    ${faites.length ? `<details class="card"><summary><b>Faites (${faites.length})</b></summary>${faites.map(ligne).join("")}</details>` : ""}`;
+}
+function contexteCp(box) {
+  const benef = (box.querySelector("#cp-benef")?.value || "").trim();
+  const org = orgsNoms.find(([, n]) => n.toLowerCase() === benef.toLowerCase());
+  return { edition_id: store.editionId, beneficiaire: benef, organisme_id: org ? org[0] : null,
+    origine: box.querySelector("#cp-origine")?.value || "autre" };
+}
+async function copierCp() {
+  const t = cps.filter((c) => !c.faite).map((c) => `- ${c.beneficiaire} : ${natureLbl(c.nature)}${c.description ? " — " + c.description : ""}${c.echeance ? " (avant le " + c.echeance + ")" : ""}`).join("\n");
+  try { await navigator.clipboard.writeText(t); toast("Liste copiée.", "ok"); } catch { prompt("Copie cette liste :", t); }
+}
+
 function wire() {
+  root.querySelectorAll("[data-cpfait],[data-cpdel],[data-cpadd]").forEach((el) => (el.onclick = async (e) => {
+    if (await actionContrepartie(e.target, cps, contexteCp)) draw();
+  }));
+  const cpN = root.querySelector("#cp-f-nature"); if (cpN) cpN.onchange = () => { cpFiltre.nature = cpN.value; draw(); };
+  const cpO = root.querySelector("#cp-f-origine"); if (cpO) cpO.onchange = () => { cpFiltre.origine = cpO.value; draw(); };
+  const cpC = root.querySelector("#cp-copier"); if (cpC) cpC.onclick = copierCp;
   root.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; mode = "list"; draw(); }));
   // diffusion
   const s = root.querySelector("#f-q"); if (s) s.oninput = () => { q = s.value; const pos = s.selectionStart; draw(); refocus(root, "#f-q", pos); };
