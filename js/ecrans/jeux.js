@@ -62,11 +62,12 @@ const mallesDe = (jeuId) => malles.filter((m) => m.jeu_id === jeuId);
 // Exemplaires (jeux de l'asso) : les malles sont prêtées en même temps (une par école,
 // un exemplaire chacune) et rendues le vendredi ; le samedi, ces exemplaires sont libres
 // pour le festival. Besoin = le plus grand des deux, pas la somme.
-const possedes = (j) => j.exemplaires_asso ?? 1;
+// Un jeu qui n'est pas à l'asso : 0 exemplaire possédé (s'il est en malle, il est « à obtenir »).
+const possedes = (j) => (j.ludotheque ? (j.exemplaires_asso ?? 1) : 0);
 const auFestival = (j) => (j.ludotheque && sel.has(j.id) ? (sel.get(j.id).exemplaires || 1) : 0);
 const besoin = (j) => Math.max(mallesDe(j.id).length, auFestival(j));
 const besoinAvecUneMalleDePlus = (j) => Math.max(mallesDe(j.id).length + 1, auFestival(j));
-const manque = (j) => (j.ludotheque ? Math.max(0, besoin(j) - possedes(j)) : 0);
+const manque = (j) => Math.max(0, besoin(j) - possedes(j));
 const aObtenir = () => [...jeux.values()].filter((j) => manque(j) > 0).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
 function usageTexte(j) {
   const ms = mallesDe(j.id).map((m) => m.malle), f = auFestival(j);
@@ -316,16 +317,17 @@ function ludoView() {
 // plusieurs malles (plusieurs exemplaires) et au festival en même temps.
 function mallesView() {
   const w = canMalles(), ludo = [...jeux.values()].filter((j) => j.ludotheque).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+  const autres = [...jeux.values()].filter((j) => !j.ludotheque).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
   const sansEcole = !ecoles.length ? `<div class="card"><p class="sync-warn">Aucune école retenue pour ce festival : choisis d'abord les écoles qui viennent dans
       <a href="#/intergeneration">Intergénérationnel → Écoles</a>. Chaque école reçoit sa malle.</p></div>` : "";
   const ajoutForm = w && ecoles.length ? `<div class="card"><div class="ihead"><h3>Ajouter un jeu à une malle</h3></div>
     <form id="malle-form" class="filters" style="align-items:flex-end">
-      <label>Jeu de la ludothèque<input id="m-jeu" list="m-jeux-dl" placeholder="Tape le titre…" autocomplete="off"></label>
-      <datalist id="m-jeux-dl">${ludo.map((j) => `<option value="${esc(j.titre)}">`).join("")}</datalist>
+      <label>Jeu<input id="m-jeu" list="m-jeux-dl" placeholder="Tape le titre…" autocomplete="off"></label>
+      <datalist id="m-jeux-dl">${ludo.map((j) => `<option value="${esc(j.titre)}">ludothèque</option>`).join("")}${autres.map((j) => `<option value="${esc(j.titre)}">pas à l'asso : à obtenir</option>`).join("")}</datalist>
       <label>Malle de l'école<select id="m-malle">${nomsEcoles().map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("")}</select></label>
       <button class="btn primary" type="submit">Ajouter</button>
     </form>
-    <p class="mini">Une malle par école retenue ; un même jeu peut être dans plusieurs malles. Seuls les jeux de l'asso (ludothèque) vont en malle. ${ludo.length ? "" : "La ludothèque est vide : ajoute d'abord des jeux de l'asso."}</p></div>` : "";
+    <p class="mini">Une malle par école retenue ; un même jeu peut être dans plusieurs malles. Un jeu qui n'est pas à l'asso (ou pas assez d'exemplaires) passe dans « À obtenir ».</p></div>` : "";
   const groupes = nomsMalles().map((nom) => {
     const lignes = malles.filter((m) => m.malle === nom).map((m) => ({ m, j: jeux.get(m.jeu_id) })).filter((x) => x.j)
       .sort((a, b) => a.j.titre.localeCompare(b.j.titre, "fr"));
@@ -520,7 +522,7 @@ function ficheView() {
         ${w ? `<button class="btn small danger" id="suppr-jeu" style="margin-top:10px">Supprimer ce jeu du catalogue</button>` : ""}
         ${BGG}
       </div>
-      <div class="r">${j.ludotheque ? blocMalles(j) : ""}${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
+      <div class="r">${j.ludotheque || mallesDe(j.id).length ? blocMalles(j) : ""}${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
           <p class="muted">Ce jeu n'est pas prévu pour ce festival.</p>
           ${w ? `<button class="btn primary" data-aufestival="${j.id}">Ajouter au festival</button>` : ""}</div>`}</div>
     </div>
@@ -685,10 +687,13 @@ function onChange(e) {
 function onSubmit(e) {
   if (e.target.id === "malle-form") {
     e.preventDefault();
-    const titre = root.querySelector("#m-jeu")?.value || "";
-    const j = [...jeux.values()].find((x) => x.ludotheque && comparable(x.titre) === comparable(titre));
-    if (!j) { toast("Choisis un jeu de la ludothèque dans la liste proposée."); return; }
-    return ajouterMalle(j.id, root.querySelector("#m-malle")?.value);
+    const titre = (root.querySelector("#m-jeu")?.value || "").trim();
+    const malle = root.querySelector("#m-malle")?.value;
+    if (!titre) { toast("Tape le titre du jeu."); return; }
+    const connus = [...jeux.values()].filter((x) => comparable(x.titre) === comparable(titre));
+    const j = connus.find((x) => x.ludotheque) || connus[0];
+    if (j) return ajouterMalle(j.id, malle);
+    return creerPourMalle(titre, malle);
   }
   if (e.target.id === "scan-form") { e.preventDefault(); return scanner(root.querySelector("#scan")?.value); }
   if (e.target.id !== "a-form") return;
@@ -740,12 +745,13 @@ async function ajouterMalle(jeuId, nom) {
   if (!nom) { toast("Indique le nom de la malle."); return; }
   if (malles.some((m) => m.jeu_id === jeuId && m.malle === nom)) { toast("Ce jeu est déjà dans cette malle."); return; }
   const j = jeux.get(jeuId);
-  if (j && besoinAvecUneMalleDePlus(j) > possedes(j)
+  if (j && j.ludotheque && besoinAvecUneMalleDePlus(j) > possedes(j)
     && !confirm(`Pas assez d'exemplaires de « ${j.titre} » pour une malle de plus : ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}, déjà en malle (${usageTexte(j)}).\n\nL'ajouter quand même à « ${nom} » ? Il passera dans la liste « À obtenir ».\n(Si l'asso en a en réalité plus, corrige plutôt le nombre d'exemplaires sur sa fiche.)`)) return;
   const { data, error } = await supa.from("malle_jeux").insert({ edition_id: store.editionId, jeu_id: jeuId, malle: nom }).select("id, jeu_id, malle").single();
   if (error) { toast("Erreur : " + error.message); return; }
   malles.push(data);
   go();
+  if (j && !j.ludotheque) toast(`« ${j.titre} » n'est pas à l'asso : il est dans « À obtenir ».`, "warn");
   if (mode === "list") root.querySelector("#m-jeu")?.focus();  // enchaîner les ajouts
 }
 async function copierObtenir() {
@@ -766,13 +772,22 @@ async function copierMalle(source) {
   const rows = malles.filter((m) => m.malle === source && !deja.has(m.jeu_id))
     .map((m) => ({ edition_id: store.editionId, jeu_id: m.jeu_id, malle: cible }));
   if (!rows.length) { toast(`« ${cible} » contient déjà tous ces jeux.`); return; }
-  const manquants = rows.map((r) => jeux.get(r.jeu_id)).filter((j) => j && besoinAvecUneMalleDePlus(j) > possedes(j));
+  const manquants = rows.map((r) => jeux.get(r.jeu_id)).filter((j) => j && j.ludotheque && besoinAvecUneMalleDePlus(j) > possedes(j));
   if (manquants.length && !confirm(`${plur(manquants.length, "jeu n'a", "jeux n'ont")} plus d'exemplaire libre (${manquants.slice(0, 5).map((j) => j.titre).join(", ")}${manquants.length > 5 ? "…" : ""}).\n\nCopier quand même ? Ils passeront dans la liste « À obtenir ».`)) return;
   const { data, error } = await supa.from("malle_jeux").insert(rows).select("id, jeu_id, malle");
   if (error) { toast("Erreur : " + error.message); return; }
   malles.push(...(data || []));
   go();
   toast(`${plur(rows.length, "jeu copié", "jeux copiés")} dans « ${cible} ».`, "ok");
+}
+// Jeu inconnu ajouté à une malle : créé au catalogue (pas à l'asso), donc « à obtenir ».
+async function creerPourMalle(titre, malle) {
+  if (!malle) { toast("Choisis la malle de l'école."); return; }
+  if (!confirm(`« ${titre} » n'est pas dans nos jeux.\n\nLe créer et l'ajouter à la malle de « ${malle} » ? Il passera dans « À obtenir » (pense ensuite à « Lier à BGG » sur sa fiche pour l'image et les infos).`)) return;
+  const { data: j, error } = await supa.from("jeux").insert({ titre, ludotheque: false, exemplaires_asso: 0 }).select().single();
+  if (error) { toast("Erreur : " + error.message); return; }
+  jeux.set(j.id, j);
+  await ajouterMalle(j.id, malle);
 }
 async function retirerMalle(id) {
   const { error } = await supa.from("malle_jeux").delete().eq("id", id);
@@ -809,11 +824,11 @@ async function garderDansLudo(j) {
   const je = j && sel.get(j.id); if (!je) return;
   if (!confirm(`« ${j.titre} » entre dans la ludothèque de l'asso ?`)) return;
   const [r1, r2] = await Promise.all([
-    supa.from("jeux").update({ ludotheque: true }).eq("id", j.id),
+    supa.from("jeux").update({ ludotheque: true, exemplaires_asso: Math.max(1, j.exemplaires_asso || 0) }).eq("id", j.id),
     supa.from("jeux_editions").update({ statut: "deja_asso" }).eq("id", je.id),
   ]);
   if (r1.error || r2.error) return toast("Erreur : " + (r1.error || r2.error).message);
-  j.ludotheque = true; je.statut = "deja_asso";
+  j.ludotheque = true; je.statut = "deja_asso"; j.exemplaires_asso = Math.max(1, j.exemplaires_asso || 0);
   const c = (je.usages || []).includes("bar") && !(je.usages || []).includes("animation") ? "bar" : "oui";
   const { error } = await supa.from("ludotheque_choix").upsert({ edition_id: store.editionId, jeu_id: j.id, choix: c }, { onConflict: "edition_id,jeu_id" });
   if (!error) choix.set(j.id, c);
@@ -994,6 +1009,8 @@ async function enregistrer() {
     categorie_id: g("categorie_id").value || null, editeur_id: g("editeur_id").value || null, ludotheque: asso,
     ean: chiffres(g("ean")?.value) || null };
   if (g("exemplaires_asso")) jPatch.exemplaires_asso = Math.max(0, numOrNull(g("exemplaires_asso").value) ?? 1);
+  // Jeu qui devient « de l'asso » (ex. obtenu pour une malle) : au moins 1 exemplaire.
+  else if (asso && !j.ludotheque && !(j.exemplaires_asso > 0)) jPatch.exemplaires_asso = 1;
   if (jPatch.ean && !/^\d{6,14}$/.test(jPatch.ean)) return dire("Code-barre : 6 à 14 chiffres.");
   const imgIn = g("image_url");
   if (imgIn) { const v = imgIn.value.trim(); jPatch.image_url = /^https?:\/\//i.test(v) ? v : null; }
