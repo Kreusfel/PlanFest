@@ -454,3 +454,5 @@ input[type=color]{padding:3px;height:44px}
 .pub-chk{margin:6px 0}
 .scan-form{display:flex;gap:6px;align-items:center}
 .scan-form input{width:150px;margin:0}
+.lier-bgg{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.lier-bgg input{flex:1;min-width:180px;margin:0}

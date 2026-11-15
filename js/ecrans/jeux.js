@@ -46,6 +46,8 @@ const numOrNull = (v) => { const n = parseInt(v, 10); return isNaN(n) ? null : n
 const comparable = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const f = (l, inner) => `<label>${l}${inner}</label>`;
 const chiffres = (v) => String(v || "").replace(/\D/g, "");
+// Numéro BGG d'un lien collé (boardgamegeek.com/boardgame/237182/root), sinon null.
+const bggIdDepuis = (t) => { const m = String(t || "").match(/boardgamegeek\.com\/(?:boardgame|boardgameexpansion|thing)\/(\d+)/i); return m ? +m[1] : null; };
 const parEan = (code) => [...jeux.values()].find((j) => j.ean && j.ean === code);
 const meta = (j) => [(j.joueurs_min || j.joueurs_max) ? `${j.joueurs_min || "?"}–${j.joueurs_max || "?"} j.` : "",
   j.duree_min ? `${j.duree_min} min` : "", j.age_min ? `${j.age_min}+` : ""].filter(Boolean).join(" · ");
@@ -305,7 +307,7 @@ function ajoutView() {
       </form>
       ${ajout.ean ? `<p class="sync-warn">Code ${esc(ajout.ean)} inconnu : cherche le jeu par son nom ci-dessous. Le code sera enregistré avec le jeu choisi.</p>` : ""}
       <form id="a-form" class="jeux-filters">
-        <input id="a-q" placeholder="Nom du jeu…" value="${esc(ajout.q)}" aria-label="Nom du jeu" autocomplete="off">
+        <input id="a-q" placeholder="Nom du jeu, ou lien BGG collé…" value="${esc(ajout.q)}" aria-label="Nom du jeu ou lien BGG" autocomplete="off">
         <button class="btn primary" type="submit">Chercher sur BGG</button>
       </form>
       <p class="msg" id="a-msg">${esc(ajout.msg)}</p>
@@ -371,7 +373,8 @@ function ficheView() {
           <div class="jeu-fiche-meta">
             ${j.bgg_id ? `<span class="pill ok">Importé de BGG</span>
               <a class="link" href="https://boardgamegeek.com/boardgame/${esc(String(j.bgg_id))}" target="_blank" rel="noopener">Voir la fiche sur BGG</a>
-              ${w ? `<button class="btn small" id="bgg-update">Mettre à jour depuis BGG</button>` : ""}` : `<span class="mini">Saisi à la main</span>`}
+              ${w ? `<button class="btn small" id="bgg-update">Mettre à jour depuis BGG</button>` : ""}` : `<span class="mini">Saisi à la main</span>
+              ${w ? `<div class="lier-bgg"><input id="lien-bgg" placeholder="Coller le lien BGG du jeu" aria-label="Lien de la fiche BGG"><button class="btn small" id="lier-bgg">Lier à BGG</button></div>` : ""}`}
           </div>
         </div>
         <span class="chk-inline"><input type="checkbox" data-jbool="ludotheque"${j.ludotheque ? " checked" : ""}${ro}> Jeu de l'asso (dans la ludothèque)</span>
@@ -458,6 +461,7 @@ async function onClick(e) {
   if (t.closest("#csv-tpl")) return modeleCsv();
   if (t.closest("#save")) return enregistrer();
   if (t.closest("#bgg-update")) return majBgg();
+  if (t.closest("#lier-bgg")) return lierBgg();
   if (t.closest("#retirer")) return retirerDuFestival(jeux.get(ficheId));
   if (t.closest("#suppr-jeu")) return supprimerJeu(jeux.get(ficheId));
   if (t.closest("#new-ed-go")) return ajouterEditeur(root.querySelector("#new-ed")?.value);
@@ -578,6 +582,15 @@ async function apresCreation(j) {
 async function chercherBgg() {
   const q = ajout.q.trim();
   if (!q) { ajout.msg = "Saisis un nom de jeu."; return go(); }
+  // Lien BGG collé : on va chercher directement ce jeu-là.
+  const idLien = bggIdDepuis(q);
+  if (idLien) {
+    dire("Lecture de la fiche BGG…");
+    const r = await lireBgg(idLien);
+    ajout.bgg = r ? [r] : [];
+    ajout.msg = r ? "" : "Fiche BGG introuvable ou BGG indisponible.";
+    return go();
+  }
   dire("Recherche sur BGG…");
   const { data, error } = await supa.functions.invoke("bgg-import", { body: { action: "search", query: q } });
   if (error || data?.error) { ajout.bgg = []; ajout.msg = "BGG indisponible pour le moment : « Saisir à la main »."; return go(); }
@@ -627,6 +640,39 @@ async function creerManuel() {
   }).select().single();
   if (error) return dire("Erreur : " + error.message);
   return apresCreation(j);
+}
+
+// Une fiche BGG par son numéro (action « thing » de la fonction bgg-import), ou null.
+async function lireBgg(id) {
+  const { data, error } = await supa.functions.invoke("bgg-import", { body: { action: "thing", bgg_id: id } });
+  if (error || !data || data.error || !data.bgg_id) return null;
+  return data;
+}
+
+// Jeu saisi à la main : le relier à sa fiche BGG (numéro, image, joueurs, durée, âge,
+// éditeur). Le titre saisi est gardé (il peut être le titre français).
+async function lierBgg() {
+  const j = jeux.get(ficheId); if (!j) return;
+  const id = bggIdDepuis(root.querySelector("#lien-bgg")?.value);
+  if (!id) return dire("Colle l'adresse d'une fiche BGG (boardgamegeek.com/boardgame/…).");
+  const autre = [...jeux.values()].find((x) => x.bgg_id === id && x.id !== j.id);
+  if (autre) {
+    root.querySelector("#j-msg").innerHTML = `Cette fiche BGG est déjà reliée à « ${esc(autre.titre)} ». <button class="btn small" data-open="${autre.id}">Ouvrir</button>`;
+    return;
+  }
+  dire("Lecture de la fiche BGG…");
+  const r = await lireBgg(id);
+  if (!r) return dire("Fiche BGG introuvable ou BGG indisponible.");
+  const patch = { bgg_id: r.bgg_id, annee: r.annee ?? j.annee, image_url: r.image_url || j.image_url,
+    miniature_url: r.miniature_url || j.miniature_url, joueurs_min: r.joueurs_min ?? j.joueurs_min,
+    joueurs_max: r.joueurs_max ?? j.joueurs_max, duree_min: r.duree_min ?? j.duree_min, age_min: r.age_min ?? j.age_min,
+    categorie_id: j.categorie_id || suggestCat(r.age_min), editeur_id: j.editeur_id || editeurConnu(r.editeurs) };
+  const { error } = await supa.from("jeux").update(patch).eq("id", j.id);
+  if (error) return dire(error.code === "23505" ? "Cette fiche BGG est déjà reliée à un autre jeu." : "Erreur : " + error.message);
+  Object.assign(j, patch);
+  bggEditeurs.set(j.id, r.editeurs || []);
+  go();
+  toast(`Relié à BGG : « ${r.titre} ».`, "ok");
 }
 
 async function majBgg() {
