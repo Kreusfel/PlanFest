@@ -108,7 +108,7 @@ function mallesTab() {
       <datalist id="malles-dl">${[...new Set(malles.map((m) => m.malle).filter(Boolean))].map((m) => `<option value="${esc(m)}">`).join("")}</datalist>
       <button class="btn primary" id="m-add"${dispo.length ? "" : " disabled"}>Ajouter</button>
       <span class="muted" id="m-msg">${dispo.length ? "" : "Tous les jeux de la ludothèque sont déjà placés."}</span>
-    </div><p class="mini">Les jeux viennent de la Ludothèque (${jeux.length} dispo). ${jeux.length ? "" : "Ajoute des jeux à l'asso d'abord (page Ludothèque)."}</p></div>` : "";
+    </div><p class="mini">Les jeux viennent de la Ludothèque (${jeux.length} dispo). ${jeux.length ? "" : "Ajoute des jeux à l'asso d'abord (écran Jeux → Ludothèque)."}</p></div>` : "";
 
   const jeuNom = (id) => jeux.find((j) => j.id === id)?.titre || "?";
   const groups = {};

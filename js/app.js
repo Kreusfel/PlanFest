@@ -10,7 +10,6 @@ import * as admin from "./ecrans/admin.js";
 import * as organismes from "./ecrans/organismes.js";
 import * as repartition from "./ecrans/repartition.js";
 import * as jeux from "./ecrans/jeux.js";
-import * as ludotheque from "./ecrans/ludotheque.js";
 import * as benevoles from "./ecrans/benevoles.js";
 import * as subventions from "./ecrans/subventions.js";
 import * as dashboard from "./ecrans/dashboard.js";
@@ -39,7 +38,8 @@ const SCREENS = {
   "/organismes": organismes,
   "/repartition": repartition,
   "/jeux": jeux,
-  "/ludotheque": ludotheque,
+  // Ancienne adresse : la ludothèque est un onglet de « Jeux ».
+  "/ludotheque": { render: (c) => jeux.render(c, "ludo") },
   "/permanences": permanences,
   "/terrain": terrain,
   // Ancienne adresse : « Mon planning » est désormais un onglet de « Sur le terrain ».
@@ -66,8 +66,7 @@ const SCREENS = {
 const NAV = [
   { group: "Pilotage", path: "/", label: "Tableau de bord", can: () => true, poles: [] },
   { group: "Préparer", path: "/organismes", label: "Organismes", can: () => true, poles: ["partenaires", "jeux_editeurs", "sponsors", "communication"] },
-  { group: "Préparer", path: "/ludotheque", label: "Ludothèque", can: () => true, poles: ["jeux_editeurs"] },
-  { group: "Préparer", path: "/jeux", label: "Sélection Jeux", can: () => true, poles: ["jeux_editeurs"] },
+  { group: "Préparer", path: "/jeux", label: "Jeux", can: () => true, poles: ["jeux_editeurs"] },
   { group: "Préparer", path: "/benevoles", label: "Bénévoles", can: () => true, poles: ["animateurs_benevoles", "intergenerationnelle"] },
   { group: "Préparer", path: "/competences", label: "Compétences (équipe)", can: () => true, poles: ["animateurs_benevoles"] },
   { group: "Préparer", path: "/subventions", label: "Subventions", can: () => true, poles: ["sponsors"] },

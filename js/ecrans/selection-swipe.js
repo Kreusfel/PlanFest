@@ -1,4 +1,4 @@
-// Composant de tri de la ludothèque (swipe), monté dans la page « Sélection Jeux ».
+// Composant de tri de la ludothèque (swipe), monté dans l'écran « Jeux » (Trier rapidement).
 // Pour chaque jeu de l'asso : Oui / Non / Oui au bar à jeux, enregistré par édition.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
@@ -43,7 +43,7 @@ function draw() {
     const c = counts();
     root.innerHTML = page(`<div class="card" style="text-align:center;padding:30px">
       <h2 style="font-size:20px">${c.decides ? "Triage terminé 🎉" : "Aucun jeu dans la ludothèque"}</h2>
-      ${c.decides ? `<p class="muted">Sur ce festival : <b>${c.oui}</b> oui · <b>${c.bar}</b> bar à jeux · <b>${c.non}</b> non.</p>` : `<p class="muted">Ajoute des jeux depuis la page <a href="#/ludotheque">Ludothèque</a> pour les trier ici.</p>`}
+      ${c.decides ? `<p class="muted">Sur ce festival : <b>${c.oui}</b> oui · <b>${c.bar}</b> bar à jeux · <b>${c.non}</b> non.</p>` : `<p class="muted">Ajoute des jeux à la ludothèque (« + Ajouter un jeu », jeu de l'asso) pour les trier ici.</p>`}
       <div class="swipe-row2" style="justify-content:center;margin-top:12px">
         <button class="btn" id="lu-all">Tout revoir</button>
         <button class="btn" id="lu-reste"${reste ? " disabled" : ""}>Revoir les non décidés</button></div></div>`);
