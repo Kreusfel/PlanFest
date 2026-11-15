@@ -69,7 +69,7 @@ const tous = () => true;
 const NAV = [
   { group: "Pilotage", path: "/", label: "Tableau de bord", can: tous, poles: [] },
   { group: "Préparer", path: "/organismes", label: "Organismes", can: pour("partenaires", "jeux_editeurs", "sponsors", "communication", "logistique_securite"), poles: ["partenaires", "jeux_editeurs", "sponsors", "communication"] },
-  { group: "Préparer", path: "/jeux", label: "Jeux", can: tous, poles: ["jeux_editeurs"] },
+  { group: "Préparer", path: "/jeux", label: "Jeux", can: tous, poles: ["jeux_editeurs", "intergenerationnelle"] },
   { group: "Préparer", path: "/benevoles", label: "Bénévoles", can: pour("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
   { group: "Préparer", path: "/competences", label: "Compétences (équipe)", can: pour("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
   { group: "Préparer", path: "/subventions", label: "Subventions", can: pour("sponsors"), poles: ["sponsors"] },

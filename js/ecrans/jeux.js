@@ -26,6 +26,7 @@ let root, loadErr = "";
 let jeux = new Map();      // catalogue : id → jeu
 let sel = new Map();       // sélection de l'édition : jeu_id → ligne jeux_editions
 let choix = new Map();     // tri de la ludothèque : jeu_id → oui | bar | non
+let malles = [];           // malles des écoles : { id, jeu_id, malle } (un jeu peut être dans plusieurs)
 let cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = [];
 let edIds = new Set(), edIdsIci = new Set();   // organismes éditeurs (toutes éditions / cette édition)
 const bggEditeurs = new Map();                 // jeu_id → éditeurs proposés par BGG
@@ -36,6 +37,10 @@ let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "", ean: "" }; 
 let csvMsg = "";
 
 const canWrite = () => isAdmin() || hasPole("jeux_editeurs");
+// Malles des écoles : pôle Jeux et pôle Intergénérationnel (migration 046).
+const canMalles = () => canWrite() || hasPole("intergenerationnelle");
+const mallesDe = (jeuId) => malles.filter((m) => m.jeu_id === jeuId);
+const nomsMalles = () => [...new Set(malles.map((m) => m.malle))].sort((a, b) => a.localeCompare(b, "fr"));
 const catNom = (id) => cats.find((c) => c.id === id)?.nom || "—";
 const orgNom = (id) => orgs.find((o) => o.id === id)?.nom || "—";
 const beneNom = (id) => benes.find((b) => b.id === id)?.nom || "?";
@@ -55,8 +60,8 @@ const meta = (j) => [(j.joueurs_min || j.joueurs_max) ? `${j.joueurs_min || "?"}
 export async function render(container, sub = "") {
   root = container;
   mode = "list"; ficheId = null;
-  tab = sub === "ludo" ? "ludo" : "festival";
-  filt.editeur = sub && sub !== "ludo" && sub !== "festival" ? sub : "";
+  tab = ["ludo", "malles"].includes(sub) ? sub : "festival";
+  filt.editeur = sub && !["ludo", "malles", "festival"].includes(sub) ? sub : "";
   if (!store.editionId) {
     root.innerHTML = `<div class="page-head"><div><h1>Jeux</h1><div class="sub">Aucune édition sélectionnée</div></div></div>
       <div class="card"><p><a class="btn primary" href="#/editions">Choisir une édition</a></p></div>`;
@@ -71,7 +76,7 @@ export async function render(container, sub = "") {
 async function load() {
   loadErr = "";
   const ed = store.editionId;
-  const [jx, je, ch, c, o, cp, be, el, oed] = await Promise.all([
+  const [jx, je, ch, c, o, cp, be, el, oed, mj] = await Promise.all([
     supa.from("jeux").select("*"),
     supa.from("jeux_editions").select("*").eq("edition_id", ed),
     supa.from("ludotheque_choix").select("jeu_id,choix").eq("edition_id", ed),
@@ -82,7 +87,9 @@ async function load() {
     Promise.resolve(null),
     supa.from("elements").select("id, numero, salle_id, salles(nom)").eq("edition_id", ed).eq("kind", "table"),
     supa.from("organisme_editions").select("organisme_id, edition_id").contains("roles", ["editeur"]),
+    supa.from("malle_jeux").select("id, jeu_id, malle").eq("edition_id", ed),
   ]);
+  malles = mj.data ?? [];
   if (jx.error || je.error) loadErr = (jx.error || je.error).message;
   jeux = new Map((jx.data ?? []).map((j) => [j.id, j]));
   sel = new Map((je.data ?? []).map((r) => [r.jeu_id, r]));
@@ -176,9 +183,10 @@ function entete() {
       <div class="head-actions">${canWrite() ? `<button class="btn primary" id="ajouter">+ Ajouter un jeu</button>` : ""}</div></div>
     <div class="utabs">
       <button data-tab="festival"${tab === "festival" ? ' class="on"' : ""}>Festival</button>
-      <button data-tab="ludo"${tab === "ludo" ? ' class="on"' : ""}>Ludothèque de l'asso</button></div>`;
+      <button data-tab="ludo"${tab === "ludo" ? ' class="on"' : ""}>Ludothèque de l'asso</button>
+      <button data-tab="malles"${tab === "malles" ? ' class="on"' : ""}>Malles des écoles</button></div>`;
 }
-function listView() { return entete() + (tab === "ludo" ? ludoView() : festivalView()); }
+function listView() { return entete() + (tab === "ludo" ? ludoView() : tab === "malles" ? mallesView() : festivalView()); }
 
 /* ---------- onglet Festival ---------- */
 function festivalFiltres() {
@@ -240,7 +248,8 @@ function ludoView() {
       const btns = CHOIX.map(([k, l, cls]) => `<button class="niv${cur === k ? " on " + cls : ""}" aria-pressed="${cur === k}" data-choix="${j.id}|${k}"${w ? "" : " disabled"}>${l}</button>`).join("");
       return `<tr>
         <td class="clk" data-open="${j.id}"><div class="ludo-cell"><span class="ludo-thumb">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
-          <span><b>${esc(j.titre)}</b>${j.annee ? ` <span class="muted">(${j.annee})</span>` : ""}</span></div></td>
+          <span><b>${esc(j.titre)}</b>${j.annee ? ` <span class="muted">(${j.annee})</span>` : ""}
+            ${mallesDe(j.id).map((m) => `<span class="pill grey">malle ${esc(m.malle)}</span>`).join(" ")}</span></div></td>
         <td class="muted">${esc(catNom(j.categorie_id))}</td>
         <td class="muted">${esc(meta(j) || "—")}</td>
         <td><div class="niv-grp" role="group" aria-label="Pour ce festival">${btns}</div></td></tr>`;
@@ -258,6 +267,33 @@ function ludoView() {
       <thead><tr><th>Jeu</th><th>Catégorie</th><th>Détails</th><th>Ce festival</th></tr></thead>
       <tbody>${rows}</tbody></table></div></div>`;
 }
+/* ---------- onglet Malles des écoles ---------- */
+// Jeux de la ludothèque prêtés aux écoles, regroupés par malle. Un même jeu peut être dans
+// plusieurs malles (plusieurs exemplaires) et au festival en même temps.
+function mallesView() {
+  const w = canMalles(), ludo = [...jeux.values()].filter((j) => j.ludotheque).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+  const ajoutForm = w ? `<div class="card"><div class="ihead"><h3>Ajouter un jeu à une malle</h3></div>
+    <form id="malle-form" class="filters" style="align-items:flex-end">
+      <label>Jeu de la ludothèque<input id="m-jeu" list="m-jeux-dl" placeholder="Tape le titre…" autocomplete="off"></label>
+      <datalist id="m-jeux-dl">${ludo.map((j) => `<option value="${esc(j.titre)}">`).join("")}</datalist>
+      <label>Malle<input id="m-malle" list="m-malles-dl" placeholder="ex. le nom de l'école" autocomplete="off"></label>
+      <datalist id="m-malles-dl">${nomsMalles().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <button class="btn primary" type="submit">Ajouter</button>
+    </form>
+    <p class="mini">Une malle par école (en général deux par édition) ; un même jeu peut être dans les deux. Seuls les jeux de l'asso (ludothèque) vont en malle. ${ludo.length ? "" : "La ludothèque est vide : ajoute d'abord des jeux de l'asso."}</p></div>` : "";
+  const groupes = nomsMalles().map((nom) => {
+    const lignes = malles.filter((m) => m.malle === nom).map((m) => ({ m, j: jeux.get(m.jeu_id) })).filter((x) => x.j)
+      .sort((a, b) => a.j.titre.localeCompare(b.j.titre, "fr"));
+    return `<div class="card"><div class="ihead"><h3>${esc(nom)}</h3><span class="muted">${plur(lignes.length, "jeu", "jeux")}
+        ${w ? ` <button class="btn small" data-mcopy="${esc(nom)}">Copier vers une autre malle</button>` : ""}</span></div>
+      <div class="scroll"><table class="data-table"><tbody>${lignes.map(({ m, j }) => `<tr>
+        <td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b>${mallesDe(j.id).length > 1 ? ` <span class="pill grey">aussi : ${esc(mallesDe(j.id).filter((x) => x.id !== m.id).map((x) => x.malle).join(", "))}</span>` : ""}${sel.has(j.id) ? ` <span class="pill blue">au festival</span>` : ""}</td>
+        <td class="muted">${esc(meta(j) || "—")}</td>
+        <td style="text-align:right">${w ? `<button class="btn small danger" data-mdel="${m.id}">Retirer</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`;
+  }).join("") || `<div class="card"><p class="muted">Aucun jeu en malle pour cette édition.</p></div>`;
+  return `<p class="mini" style="margin:8px 2px">${plur(malles.length, "jeu", "jeux")} dans ${plur(nomsMalles().length, "malle", "malles")} (prêtées aux écoles).</p>${ajoutForm}${groupes}`;
+}
+
 function triView() {
   return `<div class="page-head"><div><h1>Trier la ludothèque</h1><div class="sub">Un jeu après l'autre, pour ce festival</div></div>
     <div class="head-actions"><button class="btn" id="retour">← Ludothèque</button></div></div><div id="tri-mount"></div>`;
@@ -391,11 +427,19 @@ function ficheView() {
         ${w ? `<button class="btn small danger" id="suppr-jeu" style="margin-top:10px">Supprimer ce jeu du catalogue</button>` : ""}
         ${BGG}
       </div>
-      <div class="r">${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
+      <div class="r">${j.ludotheque ? blocMalles(j) : ""}${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
           <p class="muted">Ce jeu n'est pas prévu pour ce festival.</p>
           ${w ? `<button class="btn primary" data-aufestival="${j.id}">Ajouter au festival</button>` : ""}</div>`}</div>
     </div>
     <p class="msg" id="j-msg"></p>`;
+}
+function blocMalles(j) {
+  const w = canMalles(), ms = mallesDe(j.id);
+  return `<div class="card"><h2>Malles des écoles</h2>
+    ${ms.length ? `<div class="chk-row">${ms.map((m) => `<span class="pill grey">${esc(m.malle)}${w ? ` <button class="link" data-mdel="${m.id}" aria-label="Retirer de la malle ${esc(m.malle)}">×</button>` : ""}</span>`).join(" ")}</div>` : `<p class="muted">Dans aucune malle.</p>`}
+    ${w ? `<div class="lier-bgg"><input id="f-malle" list="f-malles-dl" placeholder="Nom de la malle" aria-label="Ajouter à une malle">
+      <datalist id="f-malles-dl">${nomsMalles().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <button class="btn small" data-madd="${j.id}">Ajouter à la malle</button></div>` : ""}</div>`;
 }
 function blocFestival(j, je, ro) {
   const a = animFor(j);
@@ -467,12 +511,15 @@ async function onClick(e) {
   if (t.closest("#retirer")) return retirerDuFestival(jeux.get(ficheId));
   if (t.closest("#suppr-jeu")) return supprimerJeu(jeux.get(ficheId));
   if (t.closest("#new-ed-go")) return ajouterEditeur(root.querySelector("#new-ed")?.value);
-  const b = t.closest("[data-choix],[data-aufestival],[data-bgg],[data-addeditor],[data-associer],[data-open]");
+  const b = t.closest("[data-choix],[data-aufestival],[data-bgg],[data-addeditor],[data-associer],[data-mdel],[data-madd],[data-mcopy],[data-open]");
   if (!b) return;
   if (b.dataset.choix) { const [id, c] = b.dataset.choix.split("|"); return choisir(id, c); }
   if (b.dataset.aufestival) { const j = jeux.get(b.dataset.aufestival); if (mode === "ajout") await memoriserEan(j); return ajouterAuFestival(j); }
   if (b.dataset.bgg != null) return ajouterDepuisBgg(ajout.bgg?.[+b.dataset.bgg]);
   if (b.dataset.addeditor) return ajouterEditeur(b.dataset.addeditor);
+  if (b.dataset.mdel) return retirerMalle(b.dataset.mdel);
+  if (b.dataset.mcopy) return copierMalle(b.dataset.mcopy);
+  if (b.dataset.madd) return ajouterMalle(b.dataset.madd, root.querySelector("#f-malle")?.value);
   if (b.dataset.associer) { const j = jeux.get(b.dataset.associer); await memoriserEan(j); return apresCreation(j); }
   if (b.dataset.open) { ficheId = b.dataset.open; mode = "fiche"; window.scrollTo(0, 0); return go(); }
 }
@@ -504,6 +551,13 @@ function onChange(e) {
   if (t.id === "csv-file") { const fl = t.files[0]; if (fl) fl.text().then((x) => { const ta = root.querySelector("#csv-text"); if (ta) ta.value = x; }); }
 }
 function onSubmit(e) {
+  if (e.target.id === "malle-form") {
+    e.preventDefault();
+    const titre = root.querySelector("#m-jeu")?.value || "";
+    const j = [...jeux.values()].find((x) => x.ludotheque && comparable(x.titre) === comparable(titre));
+    if (!j) { toast("Choisis un jeu de la ludothèque dans la liste proposée."); return; }
+    return ajouterMalle(j.id, root.querySelector("#m-malle")?.value);
+  }
   if (e.target.id === "scan-form") { e.preventDefault(); return scanner(root.querySelector("#scan")?.value); }
   if (e.target.id !== "a-form") return;
   e.preventDefault();
@@ -531,6 +585,37 @@ async function memoriserEan(j) {
 }
 
 /* ---------- actions ---------- */
+async function ajouterMalle(jeuId, nom) {
+  nom = (nom || "").trim();
+  if (!nom) { toast("Indique le nom de la malle."); return; }
+  if (malles.some((m) => m.jeu_id === jeuId && m.malle === nom)) { toast("Ce jeu est déjà dans cette malle."); return; }
+  const { data, error } = await supa.from("malle_jeux").insert({ edition_id: store.editionId, jeu_id: jeuId, malle: nom }).select("id, jeu_id, malle").single();
+  if (error) { toast("Erreur : " + error.message); return; }
+  malles.push(data);
+  go();
+  if (mode === "list") root.querySelector("#m-jeu")?.focus();  // enchaîner les ajouts
+}
+// Copie tous les jeux d'une malle vers une autre (nouvelle ou existante), sans doublon.
+async function copierMalle(source) {
+  const cible = (prompt(`Copier les jeux de « ${source} » vers quelle malle ? (nom de la malle, nouvelle ou existante)`) || "").trim();
+  if (!cible || cible === source) return;
+  const deja = new Set(malles.filter((m) => m.malle === cible).map((m) => m.jeu_id));
+  const rows = malles.filter((m) => m.malle === source && !deja.has(m.jeu_id))
+    .map((m) => ({ edition_id: store.editionId, jeu_id: m.jeu_id, malle: cible }));
+  if (!rows.length) { toast(`« ${cible} » contient déjà tous ces jeux.`); return; }
+  const { data, error } = await supa.from("malle_jeux").insert(rows).select("id, jeu_id, malle");
+  if (error) { toast("Erreur : " + error.message); return; }
+  malles.push(...(data || []));
+  go();
+  toast(`${plur(rows.length, "jeu copié", "jeux copiés")} dans « ${cible} ».`, "ok");
+}
+async function retirerMalle(id) {
+  const { error } = await supa.from("malle_jeux").delete().eq("id", id);
+  if (error) { toast("Erreur : " + error.message); return; }
+  malles = malles.filter((m) => m.id !== id);
+  go();
+}
+
 async function choisir(jeuId, c) {
   if (!canWrite()) return toast("Réservé au pôle Jeux & éditeurs.");
   const { error } = await supa.from("ludotheque_choix")

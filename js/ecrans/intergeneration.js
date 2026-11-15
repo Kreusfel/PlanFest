@@ -1,7 +1,7 @@
 // Écran #/intergeneration — pôle Intergénérationnel (journée du vendredi).
 //  - Écoles : écoles choisies pour l'event (participation vendredi + effectif).
 //  - Établissements : EHPAD / handicap / autres invités le vendredi.
-//  - Malles : jeux sélectionnés pour les malles prêtées aux écoles.
+//  - Déroulé du vendredi. Les malles des écoles se gèrent dans Jeux → Malles.
 import { supa } from "../supabase.js";
 import { store } from "../store.js";
 import { esc, toast } from "../ui/util.js";
@@ -10,27 +10,20 @@ import { parseCSV, norm } from "../ui/csv.js";
 
 const STATUTS = [["invite", "Invité"], ["confirme", "Confirmé"], ["venu", "Venu"], ["decline", "Décline"]];
 const ETAB_TYPES = ["EHPAD", "Handicap", "Foyer", "Autre"];
-let root, tab = "ecoles", mode = "list", contacts = [], parts = new Map(), jeux = [], malles = [], cats = [];
+let root, tab = "ecoles", mode = "list", contacts = [], parts = new Map();
 let csvMsg = "", importTypes = ["EHPAD"];
 const canWrite = () => isAdmin() || hasPole("intergenerationnelle");
-const catNom = (id) => cats.find((c) => c.id === id)?.nom || "";
 
 export async function render(container) {
   root = container;
   if (!store.editionId) { root.innerHTML = `<div class="card"><p><a class="btn primary" href="#/editions">Choisir une édition</a></p></div>`; return; }
   root.innerHTML = `<div class="card"><p class="muted">Chargement…</p></div>`;
-  const [cc, vp, jx, mj, c] = await Promise.all([
+  const [cc, vp] = await Promise.all([
     supa.from("comm_contacts").select("*").order("nom"),
     supa.from("vendredi_participants").select("*").eq("edition_id", store.editionId),
-    supa.from("jeux").select("id,titre,categorie_id,annee").eq("ludotheque", true).order("titre"),
-    supa.from("malle_jeux").select("*").eq("edition_id", store.editionId),
-    supa.from("categories_jeux").select("id,nom"),
   ]);
   contacts = cc.data || [];
   parts = new Map((vp.data || []).map((p) => [p.contact_id, p]));
-  jeux = jx.data || [];
-  malles = mj.data || [];
-  cats = c.data || [];
   draw();
 }
 
@@ -38,16 +31,15 @@ function draw() {
   const subTabs = `<div class="utabs">
     <button data-tab="ecoles"${tab === "ecoles" ? ' class="on"' : ""}>Écoles</button>
     <button data-tab="etab"${tab === "etab" ? ' class="on"' : ""}>Établissements</button>
-    <button data-tab="malles"${tab === "malles" ? ' class="on"' : ""}>Malles écoles</button>
     <button data-tab="deroule"${tab === "deroule" ? ' class="on"' : ""}>Déroulé du vendredi</button></div>`;
   let body;
   if (mode === "csv") body = csvView();
-  else if (tab === "malles") body = mallesTab();
   else if (tab === "deroule") body = derouleTab();
   else if (tab === "etab") body = contactsTab(ETAB_TYPES, "Établissements invités le vendredi");
   else body = contactsTab(["École"], "Écoles choisies pour l'event");
   root.innerHTML = `<div class="page-head"><div><h1>Intergénérationnel</h1>
-      <div class="sub">Journée du vendredi & malles des écoles</div></div></div>
+      <div class="sub">Journée du vendredi</div></div>
+      <div class="head-actions"><a class="btn" href="#/jeux/malles">Malles des écoles →</a></div></div>
     ${subTabs}${body}`;
   wire();
 }
@@ -122,34 +114,6 @@ function derouleTab() {
     <tbody>${rows}</tbody></table></div></div>`;
 }
 
-/* ---------- Malles écoles (jeux) ---------- */
-function mallesTab() {
-  const chosen = new Set(malles.map((m) => m.jeu_id));
-  const dispo = jeux.filter((j) => !chosen.has(j.id));
-  const addForm = canWrite() ? `<div class="card"><div class="ihead"><h3>Ajouter un jeu à une malle</h3></div>
-    <div class="filters" style="align-items:flex-end">
-      <label>Jeu<select id="m-jeu">${dispo.map((j) => `<option value="${j.id}">${esc(j.titre)}${j.annee ? ` (${j.annee})` : ""}</option>`).join("")}</select></label>
-      <label>Malle<input list="malles-dl" id="m-malle" placeholder="ex. Maternelle, Primaire 1…"></label>
-      <datalist id="malles-dl">${[...new Set(malles.map((m) => m.malle).filter(Boolean))].map((m) => `<option value="${esc(m)}">`).join("")}</datalist>
-      <button class="btn primary" id="m-add"${dispo.length ? "" : " disabled"}>Ajouter</button>
-      <span class="muted" id="m-msg">${dispo.length ? "" : "Tous les jeux de la ludothèque sont déjà placés."}</span>
-    </div><p class="mini">Les jeux viennent de la Ludothèque (${jeux.length} dispo). ${jeux.length ? "" : "Ajoute des jeux à l'asso d'abord (écran Jeux → Ludothèque)."}</p></div>` : "";
-
-  const jeuNom = (id) => jeux.find((j) => j.id === id)?.titre || "?";
-  const groups = {};
-  malles.forEach((m) => { (groups[m.malle || "Sans malle"] = groups[m.malle || "Sans malle"] || []).push(m); });
-  const names = Object.keys(groups).sort((a, b) => a.localeCompare(b, "fr"));
-  const sections = names.map((g) => `<div class="card"><div class="ihead"><h3>${esc(g)}</h3><span class="muted">${groups[g].length} jeu${groups[g].length > 1 ? "x" : ""}</span></div>
-    <div class="scroll"><table class="data-table"><tbody>${groups[g].sort((a, b) => jeuNom(a.jeu_id).localeCompare(jeuNom(b.jeu_id), "fr")).map((m) => `<tr>
-      <td>${esc(jeuNom(m.jeu_id))}</td>
-      <td style="text-align:right">${canWrite() ? `<button class="btn small danger" data-mdel="${m.jeu_id}">Retirer</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`).join("")
-    || `<div class="card"><p class="muted">Aucun jeu sélectionné pour les malles.</p></div>`;
-
-  const kpi = `<div class="grid g3"><div class="kpi"><span class="v">${malles.length}</span>Jeux en malle</div>
-    <div class="kpi"><span class="v">${names.filter((n) => n !== "Sans malle").length || (malles.length ? 1 : 0)}</span>Malles</div></div>`;
-  return `<div class="ihead"><h2 class="sect-title">Jeux des malles des écoles</h2></div>${kpi}${addForm}${sections}`;
-}
-
 /* ---------- Import CSV (établissements) ---------- */
 function csvView() {
   return `<div class="card" style="max-width:720px"><div class="ihead"><h3>Import CSV — établissements</h3>
@@ -172,8 +136,6 @@ function wire() {
   root.querySelectorAll("[data-peff]").forEach((i) => (i.onchange = () => setPart(i.dataset.peff, { effectif: parseInt(i.value, 10) || null })));
   root.querySelectorAll("[data-pdeb]").forEach((i) => (i.onchange = () => setPart(i.dataset.pdeb, { heure_debut: i.value || null })));
   root.querySelectorAll("[data-pfin]").forEach((i) => (i.onchange = () => setPart(i.dataset.pfin, { heure_fin: i.value || null })));
-  const ma = root.querySelector("#m-add"); if (ma) ma.onclick = addMalle;
-  root.querySelectorAll("[data-mdel]").forEach((b) => (b.onclick = () => delMalle(b.dataset.mdel)));
   const cf = root.querySelector("#csv-file"); if (cf) cf.onchange = () => { const f = cf.files[0]; if (f) f.text().then((t) => { const ta = root.querySelector("#csv-text"); if (ta) ta.value = t; }); };
   const cg = root.querySelector("#csv-go"); if (cg) cg.onclick = csvImport;
   const cc = root.querySelector("#csv-cancel"); if (cc) cc.onclick = () => { mode = "list"; draw(); };
@@ -213,20 +175,6 @@ async function setPart(contactId, patch) {
   const { data, error } = await supa.from("vendredi_participants").upsert(row, { onConflict: "edition_id,contact_id" }).select().single();
   if (error) return toast("Erreur : " + error.message);
   parts.set(contactId, data); draw();
-}
-
-async function addMalle() {
-  const jeu_id = root.querySelector("#m-jeu").value;
-  const malle = (root.querySelector("#m-malle").value || "").trim() || null;
-  if (!jeu_id) return;
-  const { data, error } = await supa.from("malle_jeux").insert({ edition_id: store.editionId, jeu_id, malle }).select().single();
-  if (error) { const m = root.querySelector("#m-msg"); if (m) m.textContent = "Erreur : " + error.message; return; }
-  malles.push(data); draw();
-}
-async function delMalle(jeuId) {
-  const { error } = await supa.from("malle_jeux").delete().eq("edition_id", store.editionId).eq("jeu_id", jeuId);
-  if (error) return toast("Erreur : " + error.message);
-  malles = malles.filter((m) => m.jeu_id !== jeuId); draw();
 }
 
 /* ---------- CSV établissements ---------- */
