@@ -40,6 +40,17 @@ const canWrite = () => isAdmin() || hasPole("jeux_editeurs");
 // Malles des écoles : pôle Jeux et pôle Intergénérationnel (migration 046).
 const canMalles = () => canWrite() || hasPole("intergenerationnelle");
 const mallesDe = (jeuId) => malles.filter((m) => m.jeu_id === jeuId);
+// Exemplaires (jeux de l'asso) : chaque malle en mobilise un, le festival les siens ;
+// tout est compté comme utilisé en même temps (le plus sûr).
+const possedes = (j) => j.exemplaires_asso ?? 1;
+const auFestival = (j) => (j.ludotheque && sel.has(j.id) ? (sel.get(j.id).exemplaires || 1) : 0);
+const besoin = (j) => mallesDe(j.id).length + auFestival(j);
+const manque = (j) => (j.ludotheque ? Math.max(0, besoin(j) - possedes(j)) : 0);
+const aObtenir = () => [...jeux.values()].filter((j) => manque(j) > 0).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+function usageTexte(j) {
+  const ms = mallesDe(j.id).map((m) => m.malle), f = auFestival(j);
+  return [ms.length ? `malle${ms.length > 1 ? "s" : ""} ${ms.join(", ")}` : "", f ? `festival ×${f}` : ""].filter(Boolean).join(" + ") || "non utilisé";
+}
 const nomsMalles = () => [...new Set(malles.map((m) => m.malle))].sort((a, b) => a.localeCompare(b, "fr"));
 const catNom = (id) => cats.find((c) => c.id === id)?.nom || "—";
 const orgNom = (id) => orgs.find((o) => o.id === id)?.nom || "—";
@@ -215,6 +226,7 @@ function carte(je) {
     <b>${esc(j.titre)}${j.annee ? ` <span class="mini">(${j.annee})</span>` : ""}</b>
     <div class="jeu-pills">${origine} ${usages}</div>
     ${sansAnimateur(je) ? `<div><span class="pill alert">Aucun animateur</span></div>` : ""}
+    ${manque(j) ? `<div><span class="pill alert">Manque ${manque(j)} exemplaire(s)</span></div>` : ""}
     <div class="jeu-foot">${estAnimation(je) ? plur(nbAnim, "animateur", "animateurs") + " · " : ""}${tbl}</div>
   </div>`;
 }
@@ -249,7 +261,9 @@ function ludoView() {
       return `<tr>
         <td class="clk" data-open="${j.id}"><div class="ludo-cell"><span class="ludo-thumb">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
           <span><b>${esc(j.titre)}</b>${j.annee ? ` <span class="muted">(${j.annee})</span>` : ""}
-            ${mallesDe(j.id).map((m) => `<span class="pill grey">malle ${esc(m.malle)}</span>`).join(" ")}</span></div></td>
+            ${possedes(j) !== 1 ? `<span class="muted">×${possedes(j)}</span>` : ""}
+            ${mallesDe(j.id).map((m) => `<span class="pill grey">malle ${esc(m.malle)}</span>`).join(" ")}
+            ${manque(j) ? `<span class="pill alert">manque ${manque(j)} ex.</span>` : ""}</span></div></td>
         <td class="muted">${esc(catNom(j.categorie_id))}</td>
         <td class="muted">${esc(meta(j) || "—")}</td>
         <td><div class="niv-grp" role="group" aria-label="Pour ce festival">${btns}</div></td></tr>`;
@@ -287,11 +301,18 @@ function mallesView() {
     return `<div class="card"><div class="ihead"><h3>${esc(nom)}</h3><span class="muted">${plur(lignes.length, "jeu", "jeux")}
         ${w ? ` <button class="btn small" data-mcopy="${esc(nom)}">Copier vers une autre malle</button>` : ""}</span></div>
       <div class="scroll"><table class="data-table"><tbody>${lignes.map(({ m, j }) => `<tr>
-        <td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b>${mallesDe(j.id).length > 1 ? ` <span class="pill grey">aussi : ${esc(mallesDe(j.id).filter((x) => x.id !== m.id).map((x) => x.malle).join(", "))}</span>` : ""}${sel.has(j.id) ? ` <span class="pill blue">au festival</span>` : ""}</td>
+        <td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b>${mallesDe(j.id).length > 1 ? ` <span class="pill grey">aussi : ${esc(mallesDe(j.id).filter((x) => x.id !== m.id).map((x) => x.malle).join(", "))}</span>` : ""}${sel.has(j.id) ? ` <span class="pill blue">au festival</span>` : ""}${manque(j) ? ` <span class="pill alert">manque ${manque(j)} ex.</span>` : ""}</td>
         <td class="muted">${esc(meta(j) || "—")}</td>
         <td style="text-align:right">${w ? `<button class="btn small danger" data-mdel="${m.id}">Retirer</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`;
   }).join("") || `<div class="card"><p class="muted">Aucun jeu en malle pour cette édition.</p></div>`;
-  return `<p class="mini" style="margin:8px 2px">${plur(malles.length, "jeu", "jeux")} dans ${plur(nomsMalles().length, "malle", "malles")} (prêtées aux écoles).</p>${ajoutForm}${groupes}`;
+  const ao = aObtenir();
+  const obtenir = ao.length ? `<div class="card"><div class="ihead"><h3>À obtenir</h3><span class="tag bad">${ao.length}</span>
+      <button class="btn small" id="copier-obtenir">Copier la liste</button></div>
+    <p class="mini">Jeux dont il manque des exemplaires (malles + festival, comptés en même temps). Achète-les, demande-les en don, ou augmente le nombre d'exemplaires sur leur fiche s'il était faux.</p>
+    <div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Manque</th><th>Possédés</th><th>Utilisation</th></tr></thead><tbody>
+    ${ao.map((j) => `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td><td><span class="tag bad">${manque(j)}</span></td>
+      <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></div>` : "";
+  return `<p class="mini" style="margin:8px 2px">${plur(malles.length, "jeu", "jeux")} dans ${plur(nomsMalles().length, "malle", "malles")} (prêtées aux écoles).</p>${obtenir}${ajoutForm}${groupes}`;
 }
 
 function triView() {
@@ -390,7 +411,7 @@ function csvView() {
       <p class="msg" id="csv-msg">${esc(csvMsg)}</p>
       <hr>
       <p class="mini"><b>Colonnes reconnues</b> (1ʳᵉ ligne = en-têtes, seul <b>titre</b> est obligatoire) :
-        titre · annee · categorie (nom exact) · joueurs_min · joueurs_max · duree_min · age_min · image_url · bgg_id · ean (code-barre).
+        titre · annee · categorie (nom exact) · joueurs_min · joueurs_max · duree_min · age_min · image_url · bgg_id · ean (code-barre) · exemplaires.
         Un jeu déjà connu (même titre, ou même numéro BGG) n'est pas recréé : il est simplement marqué « jeu de l'asso ».</p>
     </div>`;
 }
@@ -422,6 +443,7 @@ function ficheView() {
         ${w ? ajoutEditeur(j) : ""}
         <div class="row2">${f("Joueurs min", `<input type="number" data-j="joueurs_min" value="${j.joueurs_min ?? ""}"${ro}>`)}${f("Joueurs max", `<input type="number" data-j="joueurs_max" value="${j.joueurs_max ?? ""}"${ro}>`)}</div>
         <div class="row2">${f("Durée (min)", `<input type="number" data-j="duree_min" value="${j.duree_min ?? ""}"${ro}>`)}${f("Âge min", `<input type="number" data-j="age_min" value="${j.age_min ?? ""}"${ro}>`)}</div>
+        ${j.ludotheque ? f("Exemplaires possédés par l'asso", `<input type="number" min="0" data-j="exemplaires_asso" value="${possedes(j)}"${ro}>`) : ""}
         ${f("Code-barre (EAN)", `<input data-j="ean" inputmode="numeric" value="${esc(j.ean || "")}" placeholder="Scanner ou taper le code"${ro}>`)}
         ${j.bgg_id ? "" : f("Image (lien)", `<input data-j="image_url" value="${esc(j.image_url || "")}" placeholder="https://…"${ro}>`)}
         ${w ? `<button class="btn small danger" id="suppr-jeu" style="margin-top:10px">Supprimer ce jeu du catalogue</button>` : ""}
@@ -436,6 +458,8 @@ function ficheView() {
 function blocMalles(j) {
   const w = canMalles(), ms = mallesDe(j.id);
   return `<div class="card"><h2>Malles des écoles</h2>
+    <p class="mini">Utilisation : ${esc(usageTexte(j))} · ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}
+      ${manque(j) ? ` <span class="pill alert">manque ${manque(j)}</span>` : ""}</p>
     ${ms.length ? `<div class="chk-row">${ms.map((m) => `<span class="pill grey">${esc(m.malle)}${w ? ` <button class="link" data-mdel="${m.id}" aria-label="Retirer de la malle ${esc(m.malle)}">×</button>` : ""}</span>`).join(" ")}</div>` : `<p class="muted">Dans aucune malle.</p>`}
     ${w ? `<div class="lier-bgg"><input id="f-malle" list="f-malles-dl" placeholder="Nom de la malle" aria-label="Ajouter à une malle">
       <datalist id="f-malles-dl">${nomsMalles().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
@@ -500,6 +524,7 @@ async function onClick(e) {
   if (t.closest("#to-ajout")) { mode = "ajout"; return go(); }
   if (t.closest("#to-csv") || t.closest("#l-csv")) { csvMsg = ""; mode = "csv"; return go(); }
   if (t.closest("#l-tri")) { mode = "tri"; return go(); }
+  if (t.closest("#copier-obtenir")) return copierObtenir();
   if (t.closest("#l-nd")) { ludoNonDecides = !ludoNonDecides; return go(); }
   if (t.closest("#f-sansanim")) { filt.sansAnim = !filt.sansAnim; return go(); }
   if (t.closest("#m-create")) return creerManuel();
@@ -589,11 +614,18 @@ async function ajouterMalle(jeuId, nom) {
   nom = (nom || "").trim();
   if (!nom) { toast("Indique le nom de la malle."); return; }
   if (malles.some((m) => m.jeu_id === jeuId && m.malle === nom)) { toast("Ce jeu est déjà dans cette malle."); return; }
+  const j = jeux.get(jeuId);
+  if (j && besoin(j) + 1 > possedes(j)
+    && !confirm(`Plus d'exemplaire libre pour « ${j.titre} » : ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}, déjà utilisé(s) (${usageTexte(j)}).\n\nL'ajouter quand même à « ${nom} » ? Il passera dans la liste « À obtenir ».\n(Si l'asso en a en réalité plus, corrige plutôt le nombre d'exemplaires sur sa fiche.)`)) return;
   const { data, error } = await supa.from("malle_jeux").insert({ edition_id: store.editionId, jeu_id: jeuId, malle: nom }).select("id, jeu_id, malle").single();
   if (error) { toast("Erreur : " + error.message); return; }
   malles.push(data);
   go();
   if (mode === "list") root.querySelector("#m-jeu")?.focus();  // enchaîner les ajouts
+}
+async function copierObtenir() {
+  const texte = aObtenir().map((j) => `${j.titre} — manque ${manque(j)} (${usageTexte(j)})`).join("\n");
+  try { await navigator.clipboard.writeText(texte); toast("Liste copiée.", "ok"); } catch { prompt("Copie cette liste :", texte); }
 }
 // Copie tous les jeux d'une malle vers une autre (nouvelle ou existante), sans doublon.
 async function copierMalle(source) {
@@ -603,6 +635,8 @@ async function copierMalle(source) {
   const rows = malles.filter((m) => m.malle === source && !deja.has(m.jeu_id))
     .map((m) => ({ edition_id: store.editionId, jeu_id: m.jeu_id, malle: cible }));
   if (!rows.length) { toast(`« ${cible} » contient déjà tous ces jeux.`); return; }
+  const manquants = rows.map((r) => jeux.get(r.jeu_id)).filter((j) => j && besoin(j) + 1 > possedes(j));
+  if (manquants.length && !confirm(`${plur(manquants.length, "jeu n'a", "jeux n'ont")} plus d'exemplaire libre (${manquants.slice(0, 5).map((j) => j.titre).join(", ")}${manquants.length > 5 ? "…" : ""}).\n\nCopier quand même ? Ils passeront dans la liste « À obtenir ».`)) return;
   const { data, error } = await supa.from("malle_jeux").insert(rows).select("id, jeu_id, malle");
   if (error) { toast("Erreur : " + error.message); return; }
   malles.push(...(data || []));
@@ -808,6 +842,7 @@ async function enregistrer() {
     duree_min: numOrNull(g("duree_min").value), age_min: numOrNull(g("age_min").value),
     categorie_id: g("categorie_id").value || null, editeur_id: g("editeur_id").value || null, ludotheque: asso,
     ean: chiffres(g("ean")?.value) || null };
+  if (g("exemplaires_asso")) jPatch.exemplaires_asso = Math.max(0, numOrNull(g("exemplaires_asso").value) ?? 1);
   if (jPatch.ean && !/^\d{6,14}$/.test(jPatch.ean)) return dire("Code-barre : 6 à 14 chiffres.");
   const imgIn = g("image_url");
   if (imgIn) { const v = imgIn.value.trim(); jPatch.image_url = /^https?:\/\//i.test(v) ? v : null; }
@@ -849,6 +884,7 @@ const COLS = {
   joueurs_max: ["joueursmax", "max", "maxplayers"], duree_min: ["dureemin", "duree", "duration", "playingtime", "temps"],
   age_min: ["agemin", "age", "minage"], image_url: ["imageurl", "image", "img"], bgg_id: ["bggid", "bgg"],
   ean: ["ean", "ean13", "upc", "codebarre", "codebarres", "gencod"],
+  exemplaires: ["exemplaires", "nb", "quantite", "qte", "copies"],
 };
 async function importCsv() {
   if (!canWrite()) return;
@@ -874,7 +910,8 @@ async function importCsv() {
     nouveaux.push({ titre, annee: numOrNull(get("annee")), joueurs_min: numOrNull(get("joueurs_min")),
       joueurs_max: numOrNull(get("joueurs_max")), duree_min: numOrNull(get("duree_min")), age_min: numOrNull(get("age_min")),
       image_url: /^https?:\/\//i.test(img) ? img : null, bgg_id: bgg, ean: ean && !eansVus.has(ean) ? (eansVus.add(ean), ean) : null,
-      categorie_id: catParNom.get(norm(get("categorie"))) || null, ludotheque: true });
+      categorie_id: catParNom.get(norm(get("categorie"))) || null, ludotheque: true,
+      exemplaires_asso: Math.max(0, numOrNull(get("exemplaires")) ?? 1) });
   }
   if (!nouveaux.length && !aMarquer.size) return m(`Rien à importer : tous les jeux sont déjà dans la ludothèque${vides ? ` (${vides} ligne(s) sans titre)` : ""}.`);
   m("Import…");
