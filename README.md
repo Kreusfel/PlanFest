@@ -57,6 +57,22 @@ Safari/iOS), **douchette** (lecteur USB/Bluetooth qui tape les chiffres puis Ent
 **à la main**. Un code connu ouvre la fiche du jeu ; un code inconnu est résolu en jeu via
 l'Edge Function `gameupc` (voir Installation).
 
+## Accueil et navigation
+
+Depuis novembre 2026, l'application est **recentrée sur les jeux et les fournisseurs de
+jeux** (les pôles se gèrent désormais en autonomie). La navigation met en avant **Jeux**,
+**À obtenir** et **Fournisseurs** ; tout le reste (bénévoles, buvette, plan des salles,
+communication…) reste accessible, regroupé et replié sous **« Reste du festival »**.
+
+- **Accueil** (`js/ecrans/dashboard.js`) : état de préparation des jeux (de l'édition, à
+  obtenir, demandés, obtenus) et des fournisseurs (confirmés, à relancer, sans réponse,
+  contreparties), avec les listes « À relancer » et « Contreparties à honorer ». Les
+  compteurs sont calculés côté client (pas de RPC dédiée).
+- **Fournisseurs** (`js/ecrans/fournisseurs.js`) : les éditeurs à solliciter pour obtenir des
+  jeux — liste filtrable par statut (Sollicité → Relancé → Confirmé ; « sans réponse » après
+  15 j sans retour) et fiche détaillée (jeux attendus, contreparties à honorer, coordonnées).
+  Les types ludothèque / boutique restent à ajouter au modèle de données.
+
 ## Comptes et droits
 
 - **On rejoint PlanFest uniquement par invitation e-mail** (écran Administration, ou
