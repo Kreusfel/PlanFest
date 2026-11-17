@@ -348,6 +348,24 @@ input[type=color]{padding:3px;height:44px}
 .ajout-methodes{flex:1 1 240px;min-width:220px;display:flex;flex-direction:column;gap:10px}
 .ajout-res{flex:2 1 320px;min-width:260px}
 .ajout-ou{flex:1 1 220px;min-width:200px;background:var(--bg);border:1.5px solid var(--line);border-radius:14px;padding:14px}
+/* ---------- Fiche jeu : vue lecture (maquette) ---------- */
+.fil{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted);margin-bottom:14px}
+.fil .link{padding:0}
+.fiche-head{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+.fiche-head .avatar{width:80px;height:80px;border-radius:16px;font-size:34px}
+.fiche-head-main{flex:1 1 320px;min-width:0}
+.fiche-head-main h1{margin:6px 0 2px}
+.fiche-badges{display:flex;flex-wrap:wrap;gap:8px}
+.fiche-h2{margin:0 0 12px;font-size:20px;font-weight:700}
+.fiche-grid{display:flex;flex-wrap:wrap;gap:16px 28px}
+.fiche-grid>div{min-width:140px}
+.fiche-note{margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--neutral-tint);font-size:14px}
+.fiche-alert{margin-top:12px;display:flex;align-items:center;gap:8px;padding:12px 14px;border-radius:12px;background:var(--alert-bg);color:var(--alert);font-weight:700}
+.fiche-festival{border:2px solid var(--primary)}
+.stepper{display:flex;gap:6px}
+.stepper .step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;min-width:0}
+.step-dot{width:36px;height:36px;border-radius:50%;background:var(--neutral-tint);color:var(--neutral);display:flex;align-items:center;justify-content:center;font-weight:700}
+.step.on .step-dot{background:var(--primary);color:#fff}
 
 /* ---------- Compétences ---------- */
 .comp-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:7px 0;border-bottom:1px solid var(--line)}

@@ -53,7 +53,7 @@ let malles = [];           // malles des écoles : { id, jeu_id, malle } (un jeu
 let cats = [], orgs = [], comps = [], benes = [], beneIds = new Set(), tables = [];
 let edIds = new Set(), edIdsIci = new Set(), edStatut = new Map();   // organismes éditeurs (toutes éditions / cette édition)
 const bggEditeurs = new Map();                 // jeu_id → éditeurs proposés par BGG
-let tab = "festival", mode = "list", ficheId = null;
+let tab = "festival", mode = "list", ficheId = null, ficheMode = "lecture";  // ficheMode : lecture | edition
 let filt = { q: "", origine: "", prov: "", usage: "", categorie: "", editeur: "", sansAnim: false };
 let ludoQ = "", ludoNonDecides = false;
 let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "", upcStatus: null };  // ean : code-barre inconnu à associer ; upcStatus : statut du lookup gameupc (verified = pas de vote retour)
@@ -596,7 +596,71 @@ function csvView() {
 }
 
 /* ---------- fiche ---------- */
+/* ---------- fiche : vue lecture (maquette) + mode édition ---------- */
+function stepperJeu(step) {
+  const E = ["À obtenir", "Demandé", "Obtenu"];
+  return `<div class="stepper">${E.map((lbl, i) => `<div class="step${i <= step ? " on" : ""}"><span class="step-dot">${i <= step ? "✓" : i + 1}</span><span class="mini">${esc(lbl)}</span></div>`).join("")}</div>`;
+}
 function ficheView() {
+  if (ficheMode === "edition") return ficheEditView();
+  const j = jeux.get(ficheId);
+  if (!j) { mode = "list"; return listView(); }
+  const je = sel.get(j.id), w = canWrite();
+  const metaTxt = meta(j);
+  const badges = `${j.ludotheque ? `<span class="pill blue">Ludothèque de l'asso</span>` : ""}${je ? `<span class="pill ok">Au festival</span>` : `<span class="pill grey">Pas dans ce festival</span>`}`;
+  const leJeu = `<section class="card"><h2 class="fiche-h2">Le jeu</h2>
+    <div class="fiche-grid">
+      <div><div class="lbl">Catégorie</div>${esc(catNom(j.categorie_id))}</div>
+      <div><div class="lbl">Code-barre</div>${j.ean ? esc(j.ean) : `<span class="muted">—</span>`}</div>
+      ${j.ludotheque ? `<div><div class="lbl">Exemplaires possédés</div>${possedes(j)}</div>` : ""}
+      ${j.annee ? `<div><div class="lbl">Année</div>${j.annee}</div>` : ""}
+    </div>
+    ${(j.ludotheque || mallesDe(j.id).length) ? `<div class="fiche-note">Besoin d'exemplaires : ${esc(usageTexte(j))} → <b>${besoin(j)}</b>${manque(j) ? ` <span class="alert-txt">(manque ${manque(j)})</span>` : ""}.</div>` : ""}</section>`;
+  let ceFestival;
+  if (!je) {
+    ceFestival = `<section class="card"><h2 class="fiche-h2">Ce festival</h2><p class="muted">Ce jeu n'est pas prévu pour ce festival.</p>
+      ${w ? `<button class="btn primary" data-aufestival="${j.id}">Ajouter au festival</button>` : ""}</section>`;
+  } else if (!j.ludotheque) {
+    const step = ["souhaite", "demande", "recu"].indexOf(je.statut);
+    ceFestival = `<section class="card fiche-festival"><h2 class="fiche-h2">Ce festival</h2>
+      ${stepperJeu(step)}
+      <div class="fiche-grid" style="margin-top:14px">
+        ${je.provenance ? `<div><div class="lbl">Provenance</div><span class="pill ok">${esc(provLbl(je.provenance))}</span></div>` : ""}
+        ${je.provenance_detail ? `<div><div class="lbl">${je.statut === "recu" ? "Obtenu auprès de" : "Demandé à"}</div>${esc(je.provenance_detail)}</div>` : ""}
+      </div>
+      ${manque(j) ? `<div class="fiche-alert">⚠ Il manque ${manque(j)} exemplaire(s) : ${possedes(j)} dispo pour ${besoin(j)} nécessaires.</div>` : ""}
+      <div class="filters" style="margin-top:12px">
+        ${je.provenance === "pret" ? `<button class="btn small" data-bon="${esc(comparable(je.provenance_detail || "") || "?")}">Éditer le bon de restitution</button>` : ""}
+        ${w ? `<button class="btn small" id="modifier">Changer le statut</button>` : ""}</div></section>`;
+  } else {
+    ceFestival = `<section class="card"><h2 class="fiche-h2">Ce festival</h2><p>Jeu de l'asso, <b>pris pour ce festival</b>.</p>
+      ${manque(j) ? `<div class="fiche-alert">⚠ Il manque ${manque(j)} exemplaire(s).</div>` : ""}</section>`;
+  }
+  const cps = contreparties.filter((c) => je && c.jeu_edition_id === je.id && !c.faite);
+  const cpCard = cps.length ? `<section class="card"><h2 class="fiche-h2">Contrepartie liée</h2>
+    ${cps.map((c) => `<div class="row"><div class="row-main"><b>${esc(c.description || c.nature || "Contrepartie")}</b><span class="muted">${esc(c.beneficiaire || "")}</span></div>
+      ${w ? `<div class="actions"><button class="btn small" data-cpfait="${c.id}">✓ Marquer faite</button></div>` : ""}</div>`).join("")}</section>` : "";
+  return `<nav class="fil"><a class="link" id="retour">Jeux</a> › ${esc(j.titre)}</nav>
+    <div class="fiche-head">
+      ${avatarJeu(j)}
+      <div class="fiche-head-main">
+        <div class="fiche-badges">${badges}</div>
+        <h1>${esc(j.titre)}${j.annee ? ` <span class="muted" style="font-weight:600;font-size:22px">${j.annee}</span>` : ""}</h1>
+        ${metaTxt ? `<div class="sub">${esc(metaTxt)}</div>` : ""}
+        ${j.editeur_id ? `<div class="sub">Éditeur <b>${esc(orgNom(j.editeur_id))}</b></div>` : ""}
+      </div>
+      <div class="head-actions">
+        ${w ? `<button class="btn primary" id="modifier">Modifier la fiche</button>` : ""}
+        ${j.bgg_id ? `<a class="btn" href="https://boardgamegeek.com/boardgame/${esc(String(j.bgg_id))}" target="_blank" rel="noopener">Voir sur BGG</a>` : ""}
+      </div>
+    </div>
+    <div class="dash-cols" style="margin-top:14px">
+      <div class="dash-main">${ceFestival}${cpCard}</div>
+      <div class="dash-side">${leJeu}</div>
+    </div>`;
+}
+// Formulaire d'édition complet (ancienne fiche), accessible via « Modifier la fiche ».
+function ficheEditView() {
   const j = jeux.get(ficheId);
   if (!j) { mode = "list"; return listView(); }
   const je = sel.get(j.id), w = canWrite(), ro = w ? "" : " disabled";
@@ -731,6 +795,7 @@ async function onClick(e) {
     mode = "list"; return go();
   }
   if (t.closest("#ajouter")) { ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "", upcStatus: null }; mode = "ajout"; return go(); }
+  if (t.closest("#modifier")) { ficheMode = "edition"; return go(); }
   if (t.closest("#to-manuel")) { mode = "manuel"; return go(); }
   if (t.closest("#to-ajout")) { mode = "ajout"; return go(); }
   if (t.closest("#to-csv") || t.closest("#l-csv")) { csvMsg = ""; mode = "csv"; return go(); }
@@ -774,7 +839,7 @@ async function onClick(e) {
   }
   if (b.dataset.madd) return ajouterMalle(b.dataset.madd, root.querySelector("#f-malle")?.value);
   if (b.dataset.associer) { const j = jeux.get(b.dataset.associer); await memoriserEan(j); return apresCreation(j); }
-  if (b.dataset.open) { ficheId = b.dataset.open; mode = "fiche"; window.scrollTo(0, 0); return go(); }
+  if (b.dataset.open) { ficheId = b.dataset.open; ficheMode = "lecture"; mode = "fiche"; window.scrollTo(0, 0); return go(); }
 }
 function onInput(e) {
   const t = e.target;
@@ -839,7 +904,7 @@ async function scanner(v) {
   const code = chiffres(v);
   if (code.length < 6) { toast("Code-barre trop court."); return; }
   const j = parEan(code);
-  if (j) { ficheId = j.id; mode = "fiche"; window.scrollTo(0, 0); go(); if (!sel.has(j.id)) toast(`« ${j.titre} » : pas encore au festival.`, "warn"); return; }
+  if (j) { ficheId = j.id; ficheMode = "lecture"; mode = "fiche"; window.scrollTo(0, 0); go(); if (!sel.has(j.id)) toast(`« ${j.titre} » : pas encore au festival.`, "warn"); return; }
   if (mode !== "ajout") ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: code, prov: "don", detail: "", upcStatus: null };
   else { ajout.ean = code; ajout.upcStatus = null; }
   mode = "ajout"; go();
@@ -1046,7 +1111,7 @@ async function apresCreation(j) {
   if (sel.has(j.id)) { /* déjà au festival */ }
   else if (j.ludotheque && ajout.prendre) await choisir(j.id, "oui");
   else if (!j.ludotheque) await ajouterAuFestival(j);
-  ficheId = j.id; mode = "fiche"; go();
+  ficheId = j.id; ficheMode = "lecture"; mode = "fiche"; go();
 }
 
 async function chercherBgg() {
