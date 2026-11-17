@@ -10,6 +10,7 @@ import * as admin from "./ecrans/admin.js";
 import * as organismes from "./ecrans/organismes.js";
 import * as repartition from "./ecrans/repartition.js";
 import * as jeux from "./ecrans/jeux.js";
+import * as fournisseurs from "./ecrans/fournisseurs.js";
 import * as benevoles from "./ecrans/benevoles.js";
 import * as subventions from "./ecrans/subventions.js";
 import * as dashboard from "./ecrans/dashboard.js";
@@ -39,6 +40,7 @@ const SCREENS = {
   "/organismes": organismes,
   "/repartition": repartition,
   "/jeux": jeux,
+  "/fournisseurs": fournisseurs,
   // Ancienne adresse : la ludothèque est un onglet de « Jeux ».
   "/ludotheque": { render: (c) => jeux.render(c, "ludo"), unmount: jeux.unmount },
   "/permanences": permanences,
@@ -69,7 +71,9 @@ const tous = () => true;
 const NAV = [
   { group: "Pilotage", path: "/", label: "Tableau de bord", can: tous, poles: [] },
   { group: "Préparer", path: "/organismes", label: "Organismes", can: pour("partenaires", "jeux_editeurs", "sponsors", "communication", "logistique_securite"), poles: ["partenaires", "jeux_editeurs", "sponsors", "communication"] },
-  { group: "Préparer", path: "/jeux", label: "Jeux", can: tous, poles: ["jeux_editeurs", "intergenerationnelle"] },
+  { group: "Jeux et fournisseurs", path: "/jeux", label: "Jeux", can: tous, poles: ["jeux_editeurs", "intergenerationnelle"] },
+  { group: "Jeux et fournisseurs", path: "/jeux/obtenir", label: "À obtenir", can: tous, poles: ["jeux_editeurs"] },
+  { group: "Jeux et fournisseurs", path: "/fournisseurs", label: "Fournisseurs", can: tous, poles: ["jeux_editeurs"] },
   { group: "Préparer", path: "/benevoles", label: "Bénévoles", can: pour("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
   { group: "Préparer", path: "/competences", label: "Compétences (équipe)", can: pour("animateurs_benevoles"), poles: ["animateurs_benevoles"] },
   { group: "Préparer", path: "/subventions", label: "Subventions", can: pour("sponsors"), poles: ["sponsors"] },
@@ -97,33 +101,34 @@ const POLE_NOMS = {
   buvette_catering: "Buvette & catering", sponsors: "Sponsors", communication: "Communication",
   logistique_securite: "Logistique & sécurité", intergenerationnelle: "Intergénérationnelle",
 };
-// Construit la barre de navigation : si l'utilisateur est responsable d'un pôle
-// (hors admin), ses écrans remontent dans un groupe « Mon pôle » ; le reste suit,
-// visible mais atténué (secondaire).
-function buildNav(path) {
+// Construit la barre de navigation recentrée sur « Jeux et fournisseurs » :
+//  - Tableau de bord, puis le groupe primaire Jeux / À obtenir / Fournisseurs ;
+//  - tout le reste du festival (bénévoles, buvette, plan…) est regroupé et REPLIÉ sous
+//    « Reste du festival » (déplié automatiquement quand on est sur une de ces pages).
+// `full` = chemin complet (ex. /jeux/obtenir) pour l'état actif ; `base` = route de l'écran.
+function buildNav(full, base) {
   const items = NAV.filter((x) => x.can());
-  const myPoles = isAdmin() ? [] : session.poles;
-  const link = (n, cls) => `<a href="#${n.path}" class="navlink${cls}${n.path === path ? " on" : ""}"><span>${esc(n.label)}</span></a>`;
-  const shown = new Set();
-  const take = (pred) => { const a = items.filter((n) => !shown.has(n.path) && pred(n)); a.forEach((n) => shown.add(n.path)); return a; };
+  // Actif = l'item au chemin le plus précis qui correspond ; sinon on retombe sur la base.
+  const activePath = items.some((n) => n.path === full) ? full : base;
+  const link = (n) => `<a href="#${n.path}" class="navlink${n.path === activePath ? " on" : ""}"><span>${esc(n.label)}</span></a>`;
 
-  // Ordre prioritaire : Tableau de bord → Mon pôle → Mon espace (toujours actif) → le reste.
-  const pilotage = take((n) => n.group === "Pilotage");
-  const mine = myPoles.length ? take((n) => (n.poles || []).some((p) => myPoles.includes(p))) : [];
-  const espace = take((n) => n.group === "Mon espace");
-  const rest = items.filter((n) => !shown.has(n.path));
+  const PRIMAIRE = ["Pilotage", "Jeux et fournisseurs"];
+  const pilotage = items.filter((n) => n.group === "Pilotage");
+  const coeur = items.filter((n) => n.group === "Jeux et fournisseurs");
+  const reste = items.filter((n) => !PRIMAIRE.includes(n.group));
 
-  let nav = pilotage.map((n) => link(n, "")).join("");
-  if (mine.length) nav += `<div class="grp grp-pole">Mon pôle</div>` + mine.map((n) => link(n, "")).join("");
-  if (espace.length) nav += `<div class="grp">Mon espace</div>` + espace.map((n) => link(n, "")).join("");
-  const sec = myPoles.length ? " secondary" : "";
-  if (rest.length) {
-    nav += `<div class="nav-sep"></div>`;
-    let lastGroup = null;
-    for (const n of rest) {
-      if (n.group !== lastGroup) { nav += `<div class="grp${sec}">${esc(n.group)}</div>`; lastGroup = n.group; }
-      nav += link(n, sec);
+  let nav = pilotage.map(link).join("");
+  if (coeur.length) nav += `<div class="grp">Jeux et fournisseurs</div>` + coeur.map(link).join("");
+
+  if (reste.length) {
+    const ouvert = reste.some((n) => n.path === activePath) ? " open" : "";
+    let body = "", lastGroup = null;
+    for (const n of reste) {
+      if (n.group !== lastGroup) { body += `<div class="grp secondary">${esc(n.group)}</div>`; lastGroup = n.group; }
+      body += link(n);
     }
+    nav += `<details class="nav-reste"${ouvert}><summary>Reste du festival</summary>
+      <div class="nav-reste-body">${body}</div></details>`;
   }
   return nav;
 }
@@ -187,7 +192,7 @@ function renderShell() {
   const base = SCREENS[full] ? full : "/" + full.split("/")[1];
   const path = SCREENS[base] ? base : "/";
   const sub = full.startsWith(path) ? full.slice(path.length).replace(/^\//, "") : "";
-  const nav = buildNav(path);
+  const nav = buildNav(full, path);
   app.innerHTML = `<div class="app-shell">
     <aside class="sidebar">
       <div class="brand">PlanFest</div>

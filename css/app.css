@@ -49,6 +49,12 @@ a{color:var(--primary)}
 .navlink.secondary{color:var(--muted);font-weight:500}
 .navlink.secondary:hover{color:#111}
 .navlink.secondary.on{color:#fff}
+/* « Reste du festival » : regroupe et replie les écrans non prioritaires. */
+.nav-reste{margin-top:8px;border-top:1px solid var(--line);padding-top:4px}
+.nav-reste>summary{list-style:none;cursor:pointer;padding:8px 10px;font:600 11px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
+.nav-reste>summary::-webkit-details-marker{display:none}
+.nav-reste>summary::before{content:"▸";font-size:9px}
+.nav-reste[open]>summary::before{content:"▾"}
 .side-foot{padding-top:12px;margin-top:6px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .side-foot .who{font-size:12px;color:var(--muted);padding:0 4px;overflow:hidden;text-overflow:ellipsis}
 .sim-badge{font-size:12px;background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:6px 8px;margin-bottom:6px;line-height:1.4}
@@ -369,6 +375,10 @@ input[type=color]{padding:3px;height:44px}
 .data-table tr.hl td{background:#F0FDF4}
 .data-table tr.clk{cursor:pointer}
 .data-table tr.clk:hover td{background:var(--soft)}
+/* Ligne-titre de regroupement dans un tableau (ex. « À relancer en priorité »). */
+.data-table .group-row td{background:var(--soft);font:600 12px var(--font);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:8px 8px}
+.data-table .group-row.alert td{background:var(--alert-bg);color:var(--alert)}
+.alert-txt{color:var(--alert);font-weight:600}
 .utabs{display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap;margin-bottom:12px}
 .utabs a,.utabs button{padding:10px 14px;color:var(--muted);text-decoration:none;font-weight:600;border:0;background:none;cursor:pointer;border-bottom:2px solid transparent;min-height:auto}
 .utabs a.on,.utabs button.on{color:var(--ink);border-color:#111}
