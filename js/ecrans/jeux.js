@@ -466,17 +466,30 @@ function obtenirView() {
       ${dest ? `<div class="kan-destins">${dest}</div>` : ""}</li>`;
   };
 
-  // Jeux de malles encore à obtenir (manque d'exemplaires), ajoutés à la colonne « À obtenir ».
-  const cardMalleNeed = (j) => `<li class="kan-card">${teteJ(j.id, j.titre)}<span class="kan-sub">Pour les malles</span></div></div>
-    <div class="kan-note"><b class="alert-txt">Manque ${manque(j)}</b> · ${possedes(j)}/${besoin(j)} exemplaire(s) · ${esc(usageTexte(j))}</div></li>`;
+  // Destinations d'un jeu pour ce festival (malle / animation / bar à jeux) — multiple possible.
+  const destinationsDe = (j) => {
+    const d = new Set(), cur = choix.get(j.id), je = sel.get(j.id);
+    if (cur === "oui") d.add("animation");
+    if (cur === "bar") d.add("bar");
+    (je?.usages || []).forEach((u) => d.add(u));
+    if (mallesDe(j.id).length) d.add("malle");
+    return d;
+  };
+  const DEST_LBL = { malle: "les malles", animation: "l'animation", bar: "le bar à jeux", tombola: "la tombola" };
+  const destLabel = (j) => [...destinationsDe(j)].map((d) => DEST_LBL[d]).filter(Boolean).join(", ") || "le festival";
+
+  // Un jeu « à obtenir » = il manque des exemplaires (possédés < besoin). Un jeu de l'asso déjà
+  // possédé en quantité suffisante (manque 0) n'apparaît donc PAS ici, même sans passer par Demandé.
+  const cardManque = (j) => `<li class="kan-card">${teteJ(j.id, j.titre)}<span class="kan-sub">Pour ${esc(destLabel(j))}</span></div></div>
+    <div class="kan-note"><b class="alert-txt">Manque ${manque(j)}</b> · ${possedes(j)}/${besoin(j)} exemplaire(s)</div></li>`;
   const vide = `<li class="kan-card"><span class="muted">Rien ici pour l'instant.</span></li>`;
   const colH = (cls, titre, count, inner) => `<section class="kan-col ${cls}"><div class="kan-head"><h3>${esc(titre)}</h3><span class="count">${count}</span></div>
     <ul class="kan-list">${inner || vide}</ul></section>`;
 
   const souhaitIds = new Set(souhait.map((je) => je.jeu_id));
-  const malleNeed = aObtenir().filter((j) => !souhaitIds.has(j.id));
-  const aObtenirInner = souhait.map(cardSouhait).join("") + malleNeed.map(cardMalleNeed).join("");
-  const aObtenirCount = souhait.length + malleNeed.length;
+  const manqueGames = aObtenir().filter((j) => !souhaitIds.has(j.id));  // manque>0, hors souhaits déjà listés
+  const aObtenirInner = souhait.map(cardSouhait).join("") + manqueGames.map(cardManque).join("");
+  const aObtenirCount = souhait.length + manqueGames.length;
 
   const prets = groupesPrets();
   const pretsTable = prets.length ? `<section class="card" style="margin-top:20px"><div class="dash-panel-head"><h2>Prêts à restituer <span class="pill grey">${prets.length}</span></h2></div>
@@ -487,26 +500,18 @@ function obtenirView() {
       <td style="text-align:right"><button class="btn small" data-bon="${esc(k)}">Bon de restitution</button></td></tr>`).join("")}
     </tbody></table></div></section>` : "";
 
-  // Jeux par destination (un même jeu peut être dans plusieurs) : malle, animation, bar à jeux.
-  const destinationsDe = (j) => {
-    const d = new Set(), cur = choix.get(j.id), je = sel.get(j.id);
-    if (cur === "oui") d.add("animation");
-    if (cur === "bar") d.add("bar");
-    (je?.usages || []).forEach((u) => d.add(u));
-    if (mallesDe(j.id).length) d.add("malle");
-    return d;
-  };
-  const parDest = (dest) => [...jeux.values()].filter((j) => destinationsDe(j).has(dest)).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
-  const listeDest = (titre, dest, pillCls, extra) => {
-    const items = parDest(dest);
+  // Listes par destination : uniquement ce qui reste À OBTENIR (manque d'exemplaires) pour chaque usage.
+  const listeDest = (titre, dest) => {
+    const items = aObtenir().filter((j) => destinationsDe(j).has(dest)).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
     if (!items.length) return "";
-    return `<section class="card" style="margin-top:16px"><div class="dash-panel-head"><h2>${esc(titre)} <span class="pill ${pillCls}">${items.length}</span></h2></div>
+    return `<section class="card" style="margin-top:16px"><div class="dash-panel-head"><h2>${esc(titre)} <span class="pill alert">${items.length}</span></h2></div>
       <div class="list">${items.map((j) => `<div class="row">${avatarJeu(j)}<div class="row-main">
-        <b class="kan-card-name clk" data-open="${j.id}">${esc(j.titre)}</b>${extra ? `<span class="muted">${esc(extra(j))}</span>` : ""}</div></div>`).join("")}</div></section>`;
+        <b class="kan-card-name clk" data-open="${j.id}">${esc(j.titre)}</b>
+        <span class="muted">manque ${manque(j)} · ${possedes(j)}/${besoin(j)} · ${esc(usageTexte(j))}</span></div></div>`).join("")}</div></section>`;
   };
-  const dests = listeDest("Pour les malles", "malle", "alert", (j) => `${usageTexte(j)}${manque(j) ? ` · manque ${manque(j)}` : ""}`)
-    + listeDest("Pour l'animation", "animation", "grey")
-    + listeDest("Pour le bar à jeux", "bar", "grey");
+  const dests = listeDest("À obtenir pour les malles", "malle")
+    + listeDest("À obtenir pour l'animation", "animation")
+    + listeDest("À obtenir pour le bar à jeux", "bar");
 
   return `<div class="kanban">
     ${colH("a", "À obtenir", aObtenirCount, aObtenirInner)}
