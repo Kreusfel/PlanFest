@@ -3,18 +3,22 @@
 @import url("fonts.css");
 
 :root{
-  --bg:#F4EFE3; --surface:#FFFFFF; --surface-2:#EFE9DC; --card:#FFFFFF; --soft:#EFE9DC;
-  --line:#E6E0D2; --line-strong:#D5CEBC;
-  --ink:#1A1A17; --ink-2:#6E6C5E; --ink-3:#6E6C5E; --muted:#6E6C5E;
-  --primary:#175C4C;
-  /* Reskin : barre latérale sombre + accent ambre (voir « barre latérale »). */
-  --side-bg:#1B1D19; --side-ink:#ECEAE1; --side-muted:#9C9B8C; --accent:#E6B94E;
-  /* compat anciens noms de tokens → palette minimale */
-  --navy:#111111; --navy-ink:#000000; --navy-d:#000000;
-  --amber:#15803D; --amber-ink:#FFFFFF;          /* accent (poignées, focus) → vert */
-  --blue:#E4E4E7; --yellow:#FEF3C7; --grey:#E4E4E7;
-  --ok:#166534; --ok-bg:#DCFCE7; --warn:#92400E; --warn-bg:#FEF3C7; --alert:#991B1B; --alert-bg:#FEE2E2;
-  --radius:10px; --shadow:none;
+  /* Palette alignée sur la maquette HTML/CSS validée (style.css). */
+  --bg:#F5F0E6; --surface:#FFFDF8; --surface-2:#ECE6D8; --card:#FFFDF8; --soft:#ECE6D8;
+  --line:#E2D9C8; --line-strong:#D5CAB4;
+  --ink:#1E2A32; --ink-2:#5B6770; --ink-3:#5B6770; --muted:#5B6770;
+  --primary:#0E5A5A; --primary-tint:#DCEEEA;
+  /* Barre latérale ardoise + accent ambre (maquette). */
+  --side-bg:#1B2830; --side-ink:#D8DFE3; --side-muted:#AEB9C0;
+  --accent:#F0B429; --accent-tint:#FBEFC8; --accent-dark:#6B4A00;
+  /* compat anciens noms de tokens */
+  --navy:#1E2A32; --navy-ink:#FFFFFF; --navy-d:#16222A;
+  --amber:#F0B429; --amber-ink:#1B2830;
+  --blue:#1F4A85; --blue-tint:#DCE8F7; --green:#1F6B3F; --green-tint:#D8EEDF;
+  --purple:#4A3C8C; --purple-tint:#E7E2F5; --neutral:#3A464E; --neutral-tint:#ECE6D8;
+  --yellow:#FBEFC8; --grey:#ECE6D8;
+  --ok:#1F6B3F; --ok-bg:#D8EEDF; --warn:#6B4A00; --warn-bg:#FBEFC8; --alert:#9A3412; --alert-bg:#FCE3D3;
+  --radius:14px; --shadow:none;
   --display:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:ui-monospace,Menlo,Consolas,monospace;
@@ -64,17 +68,17 @@ a{color:var(--primary)}
 /* ---------- Reskin : barre latérale sombre + accent ambre ---------- */
 .sidebar{background:var(--side-bg);color:var(--side-ink);border-right:0}
 .brand{color:var(--side-ink);display:flex;align-items:center;gap:8px}
-.brand::before{content:"⚄";display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--accent);color:#1B1D19;font-size:18px;flex:none}
+.brand::before{content:"⚄";display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--side-bg);font-size:18px;flex:none}
 .ed{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:var(--side-ink)}
 .ed:hover{border-color:var(--accent)}
 .grp,.grp.secondary,.nav-reste>summary,.view-as,.side-foot .who{color:var(--side-muted)}
 .grp-pole{color:var(--accent)}
 .navlink{color:var(--side-ink)}
 .navlink:hover{background:rgba(255,255,255,.07);color:#fff}
-.navlink.on,.navlink.secondary.on{background:rgba(230,185,78,.14);color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
+.navlink.on,.navlink.secondary.on{background:rgba(240,180,41,.18);color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
 .navlink.secondary{color:var(--side-muted)}
 .navlink.secondary:hover{color:#fff}
-.navlink .n{background:var(--accent);color:#1B1D19}
+.navlink .n{background:var(--accent);color:var(--side-bg)}
 .nav-sep{background:rgba(255,255,255,.12)}
 .nav-reste,.side-foot{border-top-color:rgba(255,255,255,.12)}
 .view-as select{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:var(--side-ink)}
@@ -96,16 +100,16 @@ a{color:var(--primary)}
 .pill.alert{background:var(--alert-bg);color:var(--alert)}
 .pill.warn{background:var(--warn-bg);color:var(--warn)}
 .pill.ok{background:var(--ok-bg);color:var(--ok)}
-.pill.blue{background:#ECE8F7;color:#5B4FA0}
-.pill.amber{background:var(--warn-bg);color:var(--warn)}
-.pill.grey{background:var(--grey);color:#3f3f46}
+.pill.blue{background:var(--purple-tint);color:var(--purple)}
+.pill.amber{background:var(--accent-tint);color:var(--accent-dark)}
+.pill.grey{background:var(--neutral-tint);color:var(--neutral)}
 
 /* ---------- Boutons ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;min-height:44px;padding:10px 16px;
   font-weight:600;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px}
 .btn:hover{border-color:#111;background:var(--soft)}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
-.btn.primary:hover{background:#124A3D;border-color:#124A3D}
+.btn.primary:hover{background:#0A4747;border-color:#0A4747}
 .btn.ghost{background:transparent;border-color:transparent;color:inherit}
 .btn.ghost:hover{background:rgba(0,0,0,.05)}
 .btn.danger{color:var(--alert);border-color:var(--alert)}
