@@ -68,7 +68,10 @@ a{color:var(--primary)}
 /* ---------- Reskin : barre latérale sombre + accent ambre ---------- */
 .sidebar{background:var(--side-bg);color:var(--side-ink);border-right:0}
 .brand{color:var(--side-ink);display:flex;align-items:center;gap:8px}
-.brand::before{content:"⚄";display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--side-bg);font-size:18px;flex:none}
+.brand::before{content:"⚄";display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--accent);color:var(--side-bg);font-size:22px;flex:none}
+.brand-text{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.brand-text b{font-size:20px;font-weight:700}
+.brand-text small{font-size:12px;font-weight:500;color:var(--side-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ed{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:var(--side-ink)}
 .ed:hover{border-color:var(--accent)}
 .grp,.grp.secondary,.nav-reste>summary,.view-as,.side-foot .who{color:var(--side-muted)}
@@ -285,6 +288,39 @@ input[type=color]{padding:3px;height:44px}
 .kpi.ok{background:var(--ok-bg);border-color:transparent}.kpi.ok .kpi-val{color:var(--ok)}
 .kpi.warn{background:var(--warn-bg);border-color:transparent}.kpi.warn .kpi-val{color:var(--warn)}
 .reg-list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+/* ---------- Accueil : mise en page 2 colonnes (maquette) ---------- */
+.dash-cols{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.dash-main{flex:2 1 520px;min-width:0}
+.dash-side{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.dash-sec{margin-bottom:28px}
+.dash-sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+.dash-sec-head h2{margin:0;font-size:22px;font-weight:700}
+.kpi-row{display:flex;flex-wrap:wrap;gap:12px}
+.kpi-card{flex:1 1 150px;min-width:140px;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:3px;text-decoration:none;color:inherit}
+.kpi-card.alert{background:var(--alert-bg);border-color:var(--alert)}
+.kpi-num{font-size:40px;font-weight:700;line-height:1;color:var(--ink)}
+.kpi-card.alert .kpi-num{color:var(--alert)}
+.kpi-label{font-size:14.5px;font-weight:700;margin-top:6px}
+.kpi-sub{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:var(--muted)}
+.kpi-card.alert .kpi-sub{color:var(--alert)}
+.pipe{margin-top:14px;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:14px 16px}
+.pipe-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.pipe-head b{font-weight:700;font-size:15px}
+.pipe-bar{display:flex;height:36px;border-radius:10px;overflow:hidden;gap:3px}
+.pipe-seg{display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:14px;white-space:nowrap}
+.dash-panel{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:20px}
+.dash-panel.alert{border-color:var(--alert)}
+.dash-panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.dash-panel-head h2{margin:0;font-size:21px;font-weight:700}
+.relance-ul{list-style:none;margin:8px 0 0;padding:0}
+.relance-li{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.relance-ul .relance-li:first-child{border-top:0}
+.avatar{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex:none}
+.relance-main{flex:1;min-width:0}
+.relance-name{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.relance-name a{font-weight:700;font-size:15.5px;text-decoration:none;color:var(--ink)}
+.relance-when{display:flex;align-items:center;gap:5px;font-size:13.5px;font-weight:500;color:var(--muted);margin-top:2px}
+.relance-when.stale{color:var(--alert);font-weight:700}
 
 /* ---------- Compétences ---------- */
 .comp-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:7px 0;border-bottom:1px solid var(--line)}

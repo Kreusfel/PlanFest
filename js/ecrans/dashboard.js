@@ -82,102 +82,106 @@ export async function render(container) {
   draw({ nom: edRes.data?.nom || "Édition en cours", jeux, editeurs, aRelancer, sansReponse, confirmes, cp: cpRes.data || [], attendus });
 }
 
-// Une tuile chiffre. `alerte` la teinte quand il y a une action à mener.
-function kpi(val, label, alerte = false, sous = "") {
-  return `<div class="kpi${alerte ? " alert" : ""}"><div class="kpi-val">${esc(String(val))}</div>
-    <div class="kpi-lbl">${esc(label)}${sous ? `<br><span class="mini">${esc(sous)}</span>` : ""}</div></div>`;
+// Grosse carte chiffre (format maquette). alerte = teinte saumon quand il y a une action.
+function kpiCard(num, label, { alerte = false, sous = "", href = "#/jeux" } = {}) {
+  return `<a href="${href}" class="kpi-card${alerte ? " alert" : ""}">
+    <div class="kpi-num">${esc(String(num))}</div>
+    <div class="kpi-label">${esc(label)}</div>
+    ${sous ? `<div class="kpi-sub">${alerte ? "⚠ " : ""}${esc(sous)}</div>` : ""}</a>`;
 }
 
 // Barre d'avancement À obtenir → Demandé → Obtenu (segments proportionnels, vides masqués).
 function pipeline(j) {
   const seg = (n, bg, col, lbl) => (n > 0
-    ? `<div style="flex:${n};background:${bg};color:${col};padding:10px;text-align:center;white-space:nowrap">${n} ${esc(lbl)}</div>`
-    : "");
+    ? `<div class="pipe-seg" style="flex:${n};background:${bg};color:${col}">${n} ${esc(lbl)}</div>` : "");
   if (!(j.souhaite + j.demande + j.recu)) return "";
-  return `<div class="card"><div class="dash-head"><h2 style="font-size:15px;margin:0">Les jeux à obtenir, étape par étape</h2>
+  return `<div class="pipe"><div class="pipe-head"><b>Les jeux à obtenir, étape par étape</b>
       <a class="link" href="#/jeux/obtenir">Ouvrir le suivi →</a></div>
-    <div style="display:flex;border-radius:8px;overflow:hidden;font-size:12px;font-weight:600;margin-top:10px">
-      ${seg(j.souhaite, "var(--warn-bg)", "var(--warn)", "à obtenir")}
-      ${seg(j.demande, "#DBEAFE", "#1E40AF", "demandés")}
-      ${seg(j.recu, "var(--ok-bg)", "var(--ok)", "obtenus")}
-    </div></div>`;
+    <div class="pipe-bar">
+      ${seg(j.souhaite, "var(--accent)", "var(--side-bg)", "à obtenir")}
+      ${seg(j.demande, "#2B5FA8", "#fff", "demandés")}
+      ${seg(j.recu, "#2E7D4F", "#fff", "obtenus")}</div></div>`;
 }
 
-function relancesCard(aRelancer, attendus) {
-  if (!aRelancer.length) return `<div class="card"><div class="dash-head"><h2>À relancer</h2>
-    <a class="link" href="#/fournisseurs">Fournisseurs →</a></div><p class="muted">Personne à relancer. 👍</p></div>`;
-  const rows = aRelancer.slice(0, 8).map((r) => {
+// Pastille colorée avec l'initiale, couleur stable d'après le nom.
+const AV = [["var(--blue-tint)", "var(--blue)"], ["var(--purple-tint)", "var(--purple)"], ["#F3D9C4", "#7A3E14"],
+  ["#F6D5D5", "#8A2B2B"], ["#D5E6E2", "#0E4F4F"], ["var(--green-tint)", "var(--green)"], ["var(--accent-tint)", "var(--accent-dark)"]];
+function avatar(nom) {
+  const [bg, c] = AV[(nom.charCodeAt(0) || 0) % AV.length];
+  return `<span class="avatar" aria-hidden="true" style="background:${bg};color:${c}">${esc((nom[0] || "?").toUpperCase())}</span>`;
+}
+
+function relancePanel(aRelancer, attendus) {
+  if (!aRelancer.length) return `<section class="dash-panel"><div class="dash-panel-head"><h2>À relancer</h2>
+    <a class="link" href="#/fournisseurs">Fournisseurs →</a></div><p class="muted">Personne à relancer. 👍</p></section>`;
+  const items = aRelancer.slice(0, 8).map((r) => {
     const j = joursDepuis(r.dernier_contact);
     const stale = r.statut === "relance" && (j ?? 999) > STALE;
     const att = attendus.get(r.organisme_id) || 0;
-    const when = j == null ? "jamais contacté" : `Sans nouvelles depuis ${j} j`;
-    return `<tr>
-      <td><strong>${esc(r.organismes.nom)}</strong>${stale ? ` <span class="tag bad">sans réponse</span>` : r.statut === "relance" ? ` <span class="tag warn">relancé</span>` : ` <span class="tag">sollicité</span>`}</td>
-      <td class="muted">${esc(when)}${att ? ` · ${att} attendu${att > 1 ? "s" : ""}` : ""}</td>
-      <td style="text-align:right"><a class="btn small" href="#/fournisseurs">Relancer</a></td></tr>`;
+    const when = j == null ? "Jamais contacté" : `Sans nouvelles depuis ${j} j`;
+    const pill = stale ? `<span class="pill alert">Relancé · sans réponse</span>`
+      : r.statut === "relance" ? `<span class="pill amber">Relancé</span>` : `<span class="pill grey">Sollicité</span>`;
+    return `<li class="relance-li">${avatar(r.organismes.nom)}
+      <div class="relance-main">
+        <div class="relance-name"><a href="#/fournisseurs/${r.organisme_id}">${esc(r.organismes.nom)}</a>${pill}</div>
+        <div class="relance-when${stale ? " stale" : ""}">${esc(when)}${att ? ` · ${att} attendu${att > 1 ? "s" : ""}` : ""}</div>
+      </div>
+      <a class="btn small" href="#/fournisseurs/${r.organisme_id}">Relancer</a></li>`;
   }).join("");
-  return `<div class="card"><div class="dash-head"><h2>À relancer <span class="tag bad">${aRelancer.length}</span></h2>
+  return `<section class="dash-panel alert">
+    <div class="dash-panel-head"><div style="display:flex;align-items:center;gap:10px"><h2>À relancer</h2><span class="pill alert">${aRelancer.length}</span></div>
       <a class="link" href="#/fournisseurs">Tout voir →</a></div>
-    <div class="scroll"><table class="data-table"><tbody>${rows}</tbody></table></div>
-    ${aRelancer.length > 8 ? `<p class="mini">… et ${aRelancer.length - 8} autres.</p>` : ""}</div>`;
+    <ul class="relance-ul">${items}</ul>
+    ${aRelancer.length > 8 ? `<p class="mini">… et ${aRelancer.length - 8} autres.</p>` : ""}</section>`;
 }
 
-function contrepartiesCard(cp) {
+function contrepartiesPanel(cp) {
   if (!cp.length) return "";
-  const rows = cp.slice(0, 6).map((c) => `<tr>
-      <td><strong>${esc(c.description || c.nature || "Contrepartie")}</strong>
-        <br><span class="muted">${esc(c.beneficiaire || "")}</span></td>
-      <td style="text-align:right"><span class="tag warn">à honorer</span></td></tr>`).join("");
-  return `<div class="card"><div class="dash-head"><h2>Contreparties à honorer <span class="tag warn">${cp.length}</span></h2>
+  const items = cp.slice(0, 6).map((c) => `<li class="relance-li">
+    <span class="avatar" aria-hidden="true" style="background:var(--accent-tint);color:var(--accent-dark)">★</span>
+    <div class="relance-main"><div style="font-weight:700;font-size:15px">${esc(c.description || c.nature || "Contrepartie")}</div>
+      <div class="muted" style="font-size:13.5px">${esc(c.beneficiaire || "")}</div></div></li>`).join("");
+  return `<section class="dash-panel"><div class="dash-panel-head"><h2>Contreparties à honorer</h2>
       <a class="link" href="#/communication">Ouvrir →</a></div>
-    <div class="scroll"><table class="data-table"><tbody>${rows}</tbody></table></div></div>`;
+    <ul class="relance-ul">${items}</ul></section>`;
 }
 
 function draw(d) {
   const j = d.jeux;
-  const jeuxKpis = [
-    kpi(j.total, "Jeux de l'édition", false, `${j.ludo} dans la ludothèque`),
-    kpi(j.souhaite, "À obtenir"),
-    kpi(j.demande, "Demandés"),
-    kpi(j.recu, "Obtenus"),
-    kpi(j.manque, "Exemplaires manquants", j.manque > 0, j.aCompleter ? `${j.aCompleter} jeu${j.aCompleter > 1 ? "x" : ""} à compléter` : "À jour"),
+  const jeuxCards = [
+    kpiCard(j.total, "Jeux de l'édition", { sous: `${j.ludo} dans la ludothèque`, href: "#/jeux" }),
+    kpiCard(j.souhaite, "À obtenir", { href: "#/jeux/obtenir" }),
+    kpiCard(j.demande, "Demandés", { alerte: d.sansReponse > 0, sous: d.sansReponse ? `${d.sansReponse} sans réponse` : "", href: "#/jeux/obtenir" }),
+    kpiCard(j.recu, "Obtenus", { href: "#/jeux/obtenir" }),
+    kpiCard(j.manque, "Exemplaires manquants", { alerte: j.manque > 0, sous: j.manque > 0 ? "à compléter" : "à jour", href: "#/jeux" }),
   ].join("");
-  const fourKpis = [
-    kpi(d.confirmes, "Confirmés", false, `sur ${d.editeurs.length} sollicités`),
-    kpi(d.aRelancer.length, "À relancer", d.aRelancer.length > 0),
-    kpi(d.sansReponse, "Sans réponse", d.sansReponse > 0),
-    kpi(d.cp.length, "Contreparties à honorer", d.cp.length > 0),
+  const fourCards = [
+    kpiCard(d.confirmes, "Confirmés", { sous: `sur ${d.editeurs.length} sollicités`, href: "#/fournisseurs" }),
+    kpiCard(d.aRelancer.length, "À relancer", { alerte: d.aRelancer.length > 0, sous: "plus de 15 jours", href: "#/fournisseurs" }),
+    kpiCard(d.sansReponse, "Sans réponse", { alerte: d.sansReponse > 0, sous: "relancés sans retour", href: "#/fournisseurs" }),
+    kpiCard(d.cp.length, "Contreparties à honorer", { alerte: d.cp.length > 0, sous: d.cp.length ? "promesses faites" : "", href: "#/fournisseurs" }),
   ].join("");
 
   root.innerHTML = `
     <div class="page-head"><div>
-      <div class="sub" style="text-transform:uppercase;letter-spacing:.06em;font-size:11px">Édition en cours</div>
+      <div class="sub" style="text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--primary);font-weight:700">Édition en cours</div>
       <h1>${esc(d.nom)}</h1>
       <div class="sub">Voici où en est la préparation des jeux et des fournisseurs.</div>
-    </div></div>
-
-    <div class="filters" style="margin-bottom:18px">
+    </div>
+    <div class="head-actions">
       <a class="btn primary" href="#/jeux">+ Ajouter un jeu</a>
       <a class="btn" href="#/jeux">Scanner un code-barre</a>
       <a class="btn" href="#/fournisseurs">Solliciter un fournisseur</a>
-    </div>
+    </div></div>
 
-    <section class="dash-section">
-      <div class="dash-head"><h2 class="sect-title">Les jeux</h2><a class="link" href="#/jeux">Voir tous les jeux →</a></div>
-      <div class="kpis">${jeuxKpis}</div>
-      ${pipeline(j)}
-    </section>
-
-    <section class="dash-section" style="margin-top:18px">
-      <div class="dash-head"><h2 class="sect-title">Les fournisseurs de jeux</h2><a class="link" href="#/fournisseurs">Voir tous les fournisseurs →</a></div>
-      <div class="kpis">${fourKpis}</div>
-    </section>
-
-    <div class="dash-grid" style="margin-top:18px">
-      ${relancesCard(d.aRelancer, d.attendus)}
-      ${contrepartiesCard(d.cp)}
-    </div>
-
-    <p class="mini" style="margin-top:18px">Bénévoles, buvette, plan des salles, communication… restent disponibles dans
-      « Reste du festival », dans le menu.</p>`;
+    <div class="dash-cols">
+      <div class="dash-main">
+        <section class="dash-sec"><div class="dash-sec-head"><h2>Les jeux</h2><a class="link" href="#/jeux">Voir tous les jeux →</a></div>
+          <div class="kpi-row">${jeuxCards}</div>${pipeline(j)}</section>
+        <section class="dash-sec"><div class="dash-sec-head"><h2>Les fournisseurs de jeux</h2><a class="link" href="#/fournisseurs">Voir tous les fournisseurs →</a></div>
+          <div class="kpi-row">${fourCards}</div></section>
+        <p class="mini">Bénévoles, buvette, plan des salles, communication… restent disponibles dans « Reste du festival », dans le menu.</p>
+      </div>
+      <div class="dash-side">${relancePanel(d.aRelancer, d.attendus)}${contrepartiesPanel(d.cp)}</div>
+    </div>`;
 }

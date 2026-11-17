@@ -69,7 +69,7 @@ const SCREENS = {
 const pour = (...poles) => () => isAdmin() || poles.some((p) => hasPole(p));
 const tous = () => true;
 const NAV = [
-  { group: "Pilotage", path: "/", label: "Tableau de bord", can: tous, poles: [] },
+  { group: "Pilotage", path: "/", label: "Accueil", can: tous, poles: [] },
   { group: "Préparer", path: "/organismes", label: "Organismes", can: pour("partenaires", "jeux_editeurs", "sponsors", "communication", "logistique_securite"), poles: ["partenaires", "jeux_editeurs", "sponsors", "communication"] },
   { group: "Jeux et fournisseurs", path: "/jeux", label: "Jeux", can: tous, poles: ["jeux_editeurs", "intergenerationnelle"] },
   { group: "Jeux et fournisseurs", path: "/jeux/obtenir", label: "À obtenir", can: tous, poles: ["jeux_editeurs"] },
@@ -195,7 +195,7 @@ function renderShell() {
   const nav = buildNav(full, path);
   app.innerHTML = `<div class="app-shell">
     <aside class="sidebar">
-      <div class="brand">PlanFest</div>
+      <div class="brand"><span class="brand-text"><b>PlanFest</b><small>La Jurande des Conte-Brumes</small></span></div>
       <select class="ed" id="ed-select" aria-label="Édition en cours">${edOptions()}</select>
       <button class="btn small menu-btn" id="menu-btn" aria-expanded="false" aria-controls="sidenav">Menu</button>
       <nav class="sidenav" id="sidenav">${nav}</nav>
