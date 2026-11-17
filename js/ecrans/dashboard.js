@@ -27,11 +27,12 @@ export async function render(container) {
   root.innerHTML = `<div class="page-head"><div><h1>Accueil</h1>
     <div class="sub">Chargement…</div></div></div><div class="card"><p class="muted">Un instant…</p></div>`;
 
-  // Tout en parallèle. jeux_editions, jeux, organisme_editions et contreparties sont
-  // lisibles par un compte actif (policies select = est_actif()).
-  const [jeRes, ludoRes, oeRes, cpRes, edRes] = await Promise.all([
-    supa.from("jeux_editions").select("statut, jeux(editeur_id)").eq("edition_id", ed),
-    supa.from("jeux").select("id", { count: "exact", head: true }).eq("ludotheque", true),
+  // Tout en parallèle. jeux_editions, jeux, malle_jeux, organisme_editions et contreparties
+  // sont lisibles par un compte actif (policies select = est_actif()).
+  const [jeRes, jxRes, mjRes, oeRes, cpRes, edRes] = await Promise.all([
+    supa.from("jeux_editions").select("statut, exemplaires, jeu_id, jeux(editeur_id)").eq("edition_id", ed),
+    supa.from("jeux").select("id, ludotheque, exemplaires_asso"),
+    supa.from("malle_jeux").select("jeu_id").eq("edition_id", ed),
     supa.from("organisme_editions").select("statut, dernier_contact, roles, organisme_id, organismes(nom)").eq("edition_id", ed),
     supa.from("contreparties").select("nature, description, beneficiaire, faite").eq("edition_id", ed).eq("faite", false),
     supa.from("editions").select("nom").eq("id", ed).single(),
@@ -44,8 +45,25 @@ export async function render(container) {
   }
 
   const je = jeRes.data || [];
+  const jx = jxRes.data || [];
   const nb = (s) => je.filter((x) => x.statut === s).length;
-  const jeux = { total: je.length, souhaite: nb("souhaite"), demande: nb("demande"), recu: nb("recu"), ludo: ludoRes.count ?? 0 };
+
+  // Exemplaires manquants — même règle que l'écran Jeux : possédés (exemplaires_asso si
+  // jeu de l'asso, sinon 0) comparés au besoin = max(nb de malles, exemplaires au festival).
+  const mallesParJeu = new Map();
+  (mjRes.data || []).forEach((m) => mallesParJeu.set(m.jeu_id, (mallesParJeu.get(m.jeu_id) || 0) + 1));
+  const exFestival = new Map();
+  je.forEach((x) => exFestival.set(x.jeu_id, x.exemplaires || 1));
+  let manqueTotal = 0, aCompleter = 0;
+  jx.forEach((j) => {
+    const possedes = j.ludotheque ? (j.exemplaires_asso ?? 1) : 0;
+    const besoin = Math.max(mallesParJeu.get(j.id) || 0, (j.ludotheque && exFestival.has(j.id)) ? exFestival.get(j.id) : 0);
+    const m = Math.max(0, besoin - possedes);
+    if (m > 0) { manqueTotal += m; aCompleter++; }
+  });
+
+  const jeux = { total: je.length, souhaite: nb("souhaite"), demande: nb("demande"), recu: nb("recu"),
+    ludo: jx.filter((j) => j.ludotheque).length, manque: manqueTotal, aCompleter };
 
   // Jeux encore attendus par fournisseur (souhaités ou demandés) → compteur « N attendus ».
   const attendus = new Map();
@@ -122,6 +140,7 @@ function draw(d) {
     kpi(j.souhaite, "À obtenir"),
     kpi(j.demande, "Demandés"),
     kpi(j.recu, "Obtenus"),
+    kpi(j.manque, "Exemplaires manquants", j.manque > 0, j.aCompleter ? `${j.aCompleter} jeu${j.aCompleter > 1 ? "x" : ""} à compléter` : "À jour"),
   ].join("");
   const fourKpis = [
     kpi(d.confirmes, "Confirmés", false, `sur ${d.editeurs.length} sollicités`),

@@ -298,6 +298,11 @@ function ludoView() {
     .sort((a, b) => a.titre.localeCompare(b.titre, "fr")).map((j) => {
       const img = j.miniature_url || j.image_url, cur = choix.get(j.id);
       const btns = CHOIX.map(([k, l, cls]) => `<button class="niv${cur === k ? " on " + cls : ""}" aria-pressed="${cur === k}" data-choix="${j.id}|${k}"${w ? "" : " disabled"}>${l}</button>`).join("");
+      // Destination = où va le jeu pour ce festival (choix Oui/Bar + malles des écoles).
+      const dest = [];
+      if (cur === "oui") dest.push(`<span class="pill ok">Animation</span>`);
+      else if (cur === "bar") dest.push(`<span class="pill amber">Bar à jeux</span>`);
+      if (mallesDe(j.id).length) dest.push(`<span class="pill grey">Malles</span>`);
       return `<tr>
         <td class="clk" data-open="${j.id}"><div class="ludo-cell"><span class="ludo-thumb">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
           <span><b>${esc(j.titre)}</b>${j.annee ? ` <span class="muted">(${j.annee})</span>` : ""}
@@ -306,8 +311,9 @@ function ludoView() {
             ${manque(j) ? `<span class="pill alert">manque ${manque(j)} ex.</span>` : ""}</span></div></td>
         <td class="muted">${esc(catNom(j.categorie_id))}</td>
         <td class="muted">${esc(meta(j) || "—")}</td>
+        <td>${dest.length ? dest.join(" ") : `<span class="muted">—</span>`}</td>
         <td><div class="niv-grp" role="group" aria-label="Pour ce festival">${btns}</div></td></tr>`;
-    }).join("") || `<tr><td colspan="4" class="muted">${tous.length ? "Aucun jeu pour cette recherche." : "La ludothèque est vide : « + Ajouter un jeu » ou import CSV."}</td></tr>`;
+    }).join("") || `<tr><td colspan="5" class="muted">${tous.length ? "Aucun jeu pour cette recherche." : "La ludothèque est vide : « + Ajouter un jeu » ou import CSV."}</td></tr>`;
   const c = { oui: 0, bar: 0, non: 0 }; for (const v of choix.values()) if (v in c) c[v]++;
   return `<div class="card">
     <div class="filters">
@@ -318,7 +324,7 @@ function ludoView() {
     </div>
     <p class="mini">Pour ce festival : <b>${c.oui}</b> oui · <b>${c.bar}</b> bar à jeux · <b>${c.non}</b> non. « Oui » et « Bar » ajoutent le jeu à l'onglet Festival.</p>
     <div class="scroll"><table class="data-table">
-      <thead><tr><th>Jeu</th><th>Catégorie</th><th>Détails</th><th>Ce festival</th></tr></thead>
+      <thead><tr><th>Jeu</th><th>Catégorie</th><th>Détails</th><th>Destination</th><th>Ce festival</th></tr></thead>
       <tbody>${rows}</tbody></table></div></div>`;
 }
 /* ---------- onglet Malles des écoles ---------- */
