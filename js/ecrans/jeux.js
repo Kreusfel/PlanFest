@@ -694,7 +694,7 @@ function ficheEditView() {
         ${w ? `<button class="btn small danger" id="suppr-jeu" style="margin-top:10px">Supprimer ce jeu du catalogue</button>` : ""}
         ${BGG}
       </div>
-      <div class="r">${j.ludotheque || mallesDe(j.id).length ? blocMalles(j) : ""}${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
+      <div class="r">${mallesDe(j.id).length ? blocMalles(j) : ""}${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
           <p class="muted">Ce jeu n'est pas prévu pour ce festival.</p>
           ${w ? `<button class="btn primary" data-aufestival="${j.id}">Ajouter au festival</button>` : ""}</div>`}</div>
     </div>
