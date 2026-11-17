@@ -440,8 +440,9 @@ function obtenirView() {
   const demande = afaire.filter((je) => je.statut === "demande");
   const recu = afaire.filter((je) => je.statut === "recu");
   const nom = (je) => jeux.get(je.jeu_id).titre;
-  const tete = (je) => `<div class="kan-card-top">${avatarJeu(jeux.get(je.jeu_id))}
-    <div class="row-main"><span class="kan-card-name clk" data-open="${je.jeu_id}">${esc(nom(je))}</span>`;
+  const teteJ = (id, titre) => `<div class="kan-card-top">${avatarJeu(jeux.get(id))}
+    <div class="row-main"><span class="kan-card-name clk" data-open="${id}">${esc(titre)}</span>`;
+  const tete = (je) => teteJ(je.jeu_id, nom(je));
 
   const cardSouhait = (je) => { const ed = editeurDe(je), nomEd = ed ? orgNom(ed) : "";
     return `<li class="kan-card">${tete(je)}<span class="kan-sub">${jeux.get(je.jeu_id).annee || ""}</span></div></div>
@@ -465,12 +466,20 @@ function obtenirView() {
       ${dest ? `<div class="kan-destins">${dest}</div>` : ""}</li>`;
   };
 
-  const col = (cls, titre, items, render) => `<section class="kan-col ${cls}"><div class="kan-head"><h3>${esc(titre)}</h3><span class="count">${items.length}</span></div>
-    <ul class="kan-list">${items.slice(0, 40).map(render).join("") || `<li class="kan-card"><span class="muted">Rien ici pour l'instant.</span></li>`}</ul>
-    ${items.length > 40 ? `<p class="mini" style="text-align:center">… et ${items.length - 40} autres (voir l'onglet Jeux).</p>` : ""}</section>`;
+  // Jeux de malles encore à obtenir (manque d'exemplaires), ajoutés à la colonne « À obtenir ».
+  const cardMalleNeed = (j) => `<li class="kan-card">${teteJ(j.id, j.titre)}<span class="kan-sub">Pour les malles</span></div></div>
+    <div class="kan-note"><b class="alert-txt">Manque ${manque(j)}</b> · ${possedes(j)}/${besoin(j)} exemplaire(s) · ${esc(usageTexte(j))}</div></li>`;
+  const vide = `<li class="kan-card"><span class="muted">Rien ici pour l'instant.</span></li>`;
+  const colH = (cls, titre, count, inner) => `<section class="kan-col ${cls}"><div class="kan-head"><h3>${esc(titre)}</h3><span class="count">${count}</span></div>
+    <ul class="kan-list">${inner || vide}</ul></section>`;
+
+  const souhaitIds = new Set(souhait.map((je) => je.jeu_id));
+  const malleNeed = aObtenir().filter((j) => !souhaitIds.has(j.id));
+  const aObtenirInner = souhait.map(cardSouhait).join("") + malleNeed.map(cardMalleNeed).join("");
+  const aObtenirCount = souhait.length + malleNeed.length;
 
   const prets = groupesPrets();
-  const pretsTable = prets.length ? `<section class="card" style="margin-top:24px"><div class="dash-panel-head"><h2>Prêts à restituer <span class="pill grey">${prets.length}</span></h2></div>
+  const pretsTable = prets.length ? `<section class="card" style="margin-top:20px"><div class="dash-panel-head"><h2>Prêts à restituer <span class="pill grey">${prets.length}</span></h2></div>
     <div class="scroll"><table class="data-table"><thead><tr><th>Prêteur</th><th>Jeux prêtés</th><th>À rendre</th><th></th></tr></thead><tbody>
     ${prets.map(([k, g]) => `<tr><td><b>${esc(g.nom)}</b></td>
       <td class="muted">${esc(g.lignes.map((je) => nom(je)).sort((a, b) => a.localeCompare(b, "fr")).join(", "))}</td>
@@ -478,18 +487,31 @@ function obtenirView() {
       <td style="text-align:right"><button class="btn small" data-bon="${esc(k)}">Bon de restitution</button></td></tr>`).join("")}
     </tbody></table></div></section>` : "";
 
-  const ao = aObtenir();
-  const malles = ao.length ? `<section class="card" style="margin-top:24px"><div class="dash-panel-head"><h2>Exemplaires manquants pour les malles <span class="pill alert">${ao.length}</span>
-      <button class="btn small" id="copier-obtenir">Copier la liste</button></div>
-    <div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Manque</th><th>Possédés</th><th>Utilisation</th></tr></thead><tbody>
-    ${ao.map((j) => `<tr><td><b class="clk" data-open="${j.id}">${esc(j.titre)}</b></td><td><span class="pill alert">${manque(j)}</span></td>
-      <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></section>` : "";
+  // Jeux par destination (un même jeu peut être dans plusieurs) : malle, animation, bar à jeux.
+  const destinationsDe = (j) => {
+    const d = new Set(), cur = choix.get(j.id), je = sel.get(j.id);
+    if (cur === "oui") d.add("animation");
+    if (cur === "bar") d.add("bar");
+    (je?.usages || []).forEach((u) => d.add(u));
+    if (mallesDe(j.id).length) d.add("malle");
+    return d;
+  };
+  const parDest = (dest) => [...jeux.values()].filter((j) => destinationsDe(j).has(dest)).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+  const listeDest = (titre, dest, pillCls, extra) => {
+    const items = parDest(dest);
+    if (!items.length) return "";
+    return `<section class="card" style="margin-top:16px"><div class="dash-panel-head"><h2>${esc(titre)} <span class="pill ${pillCls}">${items.length}</span></h2></div>
+      <div class="list">${items.map((j) => `<div class="row">${avatarJeu(j)}<div class="row-main">
+        <b class="kan-card-name clk" data-open="${j.id}">${esc(j.titre)}</b>${extra ? `<span class="muted">${esc(extra(j))}</span>` : ""}</div></div>`).join("")}</div></section>`;
+  };
+  const dests = listeDest("Pour les malles", "malle", "alert", (j) => `${usageTexte(j)}${manque(j) ? ` · manque ${manque(j)}` : ""}`)
+    + listeDest("Pour l'animation", "animation", "grey")
+    + listeDest("Pour le bar à jeux", "bar", "grey");
 
-  if (!afaire.length && !ao.length) return `<div class="card"><p class="muted">Rien à obtenir : tous les jeux du festival sont là. 🎉</p></div>`;
   return `<div class="kanban">
-    ${col("a", "À obtenir", souhait, cardSouhait)}
-    ${col("d", "Demandé", demande, cardDemande)}
-    ${col("o", "Obtenu", recu, cardRecu)}</div>${pretsTable}${malles}`;
+    ${colH("a", "À obtenir", aObtenirCount, aObtenirInner)}
+    ${colH("d", "Demandé", demande.length, demande.map(cardDemande).join(""))}
+    ${colH("o", "Obtenu", recu.length, recu.slice(0, 40).map(cardRecu).join(""))}</div>${pretsTable}${dests}`;
 }
 
 function triView() {
