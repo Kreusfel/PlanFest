@@ -377,6 +377,14 @@ input[type=color]{padding:3px;height:44px}
 .stepper .step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;min-width:0}
 .step-dot{width:36px;height:36px;border-radius:50%;background:var(--neutral-tint);color:var(--neutral);display:flex;align-items:center;justify-content:center;font-weight:700}
 .step.on .step-dot{background:var(--primary);color:#fff}
+/* ---------- Filtres en pastilles + cellule avec avatar (Fournisseurs) ---------- */
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 16px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;font-size:14.5px;cursor:pointer}
+.chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.chip.alert{border-color:var(--alert);color:var(--alert)}
+.chip.alert.on{background:var(--alert);border-color:var(--alert);color:#fff}
+.chip-n{font-size:12.5px;padding:1px 8px;border-radius:999px;background:rgba(30,42,50,.08)}
+.chip.on .chip-n{background:rgba(255,255,255,.22)}
+.four-cell{display:flex;align-items:center;gap:12px}
 
 /* ---------- Compétences ---------- */
 .comp-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:7px 0;border-bottom:1px solid var(--line)}

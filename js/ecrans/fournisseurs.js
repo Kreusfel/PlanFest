@@ -54,12 +54,17 @@ const roleLbl = (roles) => (roles || []).includes("editeur")
   ? (roles.includes("sponsor") ? "Éditeur Sponsor" : roles.includes("partenaire") ? "Éditeur Partenaire" : "Éditeur")
   : "Fournisseur";
 
+// Pastille colorée avec l'initiale (couleur stable d'après le nom).
+const AV = [["var(--blue-tint)", "var(--blue)"], ["var(--purple-tint)", "var(--purple)"], ["#F3D9C4", "#7A3E14"],
+  ["#F6D5D5", "#8A2B2B"], ["#D5E6E2", "#0E4F4F"], ["var(--green-tint)", "var(--green)"], ["var(--accent-tint)", "var(--accent-dark)"]];
+const avatar = (nom) => { const [bg, c] = AV[(nom.charCodeAt(0) || 0) % AV.length]; return `<span class="avatar" aria-hidden="true" style="background:${bg};color:${c}">${esc((nom[0] || "?").toUpperCase())}</span>`; };
+
 function statutTag(r) {
-  if (r.statut === "confirme") return `<span class="tag ok">✓ Confirmé</span>`;
-  if (r.statut === "refuse") return `<span class="tag bad">Refusé</span>`;
-  if (estSansReponse(r)) return `<span class="tag bad">⚠ Relancé · sans réponse</span>`;
-  if (r.statut === "relance") return `<span class="tag warn">Relancé</span>`;
-  return `<span class="tag">Sollicité</span>`;
+  if (r.statut === "confirme") return `<span class="pill ok">✓ Confirmé</span>`;
+  if (r.statut === "refuse") return `<span class="pill alert">Refusé</span>`;
+  if (estSansReponse(r)) return `<span class="pill alert">⚠ Relancé · sans réponse</span>`;
+  if (r.statut === "relance") return `<span class="pill amber">Relancé</span>`;
+  return `<span class="pill grey">Sollicité</span>`;
 }
 
 // Prédicats des filtres de la barre.
@@ -84,7 +89,9 @@ function ligne(r) {
     ? `<button class="btn small" data-relancer="${id}">✉ Relancer</button>`
     : `<a class="link" href="#/fournisseurs/${id}">Ouvrir</a>`;
   return `<tr>
-    <td><a class="link" href="#/fournisseurs/${id}"><strong>${esc(r.organismes.nom)}</strong></a><br><span class="muted">${esc(roleLbl(r.roles))}</span></td>
+    <td><div class="four-cell">${avatar(r.organismes.nom)}<div class="row-main">
+      <a class="link" href="#/fournisseurs/${id}" style="padding:0"><strong>${esc(r.organismes.nom)}</strong></a>
+      <span class="muted">${esc(roleLbl(r.roles))}</span></div></div></td>
     <td>${statutTag(r)}</td>
     <td>${date}</td>
     <td>${att ? `${att} jeu${att > 1 ? "x" : ""}` : "<span class=\"muted\">—</span>"}</td>
@@ -94,8 +101,10 @@ function ligne(r) {
 
 function draw() {
   const compte = (k) => editeurs.filter(FILTRES[k]).length;
-  const chips = Object.keys(FILTRE_LBL).map((k) =>
-    `<button class="btn small${filtre === k ? " primary" : ""}" data-filtre="${k}">${esc(FILTRE_LBL[k])} <span class="mini">${compte(k)}</span></button>`).join("");
+  const chips = Object.keys(FILTRE_LBL).map((k) => {
+    const alertK = k === "relancer" || k === "sansreponse";
+    return `<button class="chip${filtre === k ? " on" : ""}${alertK ? " alert" : ""}" data-filtre="${k}">${esc(FILTRE_LBL[k])} <span class="chip-n">${compte(k)}</span></button>`;
+  }).join("");
 
   const liste = editeurs.filter(FILTRES[filtre]);
   let corps;
@@ -115,10 +124,12 @@ function draw() {
 
   root.innerHTML = `
     <div class="page-head"><div>
-      <div class="sub" style="text-transform:uppercase;letter-spacing:.06em;font-size:11px">Jeux et fournisseurs</div>
+      <div class="sub" style="text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--primary);font-weight:700">Jeux et fournisseurs</div>
       <h1>Les fournisseurs de jeux</h1>
       <div class="sub">Les contacts à solliciter pour obtenir des jeux (éditeurs).</div>
-    </div></div>
+    </div>
+    <div class="head-actions"><a class="btn primary" href="#/organismes">+ Ajouter un fournisseur</a></div></div>
+    <p class="mini" style="margin:-8px 0 14px"><b>Type :</b> seuls les éditeurs sont gérés pour l'instant (ludothèques / boutiques à venir).</p>
     <div class="card">
       <div class="filters" style="margin-bottom:12px">${chips}</div>
       <div class="scroll"><table class="data-table">
