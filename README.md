@@ -87,12 +87,15 @@ Pour que les liens des e-mails (invitation, mot de passe) reviennent en local, a
      automatiquement par Supabase à la fonction) ;
    - `bgg-import` : recherche de jeux sur BoardGameGeek, réservée aux comptes actifs.
    - `gameupc` : résout un code-barre (UPC) en numéro BGG via gameupc.com, réservée aux
-     comptes actifs. Sans le secret `GAMEUPC_KEY`, elle tourne en **mode test** (seuls les
-     UPC de démo de gameupc répondent) ; dès que la vraie clé est posée en secret, elle
-     passe en prod sans changer le code.
+     comptes actifs. Trois paliers (voir `GAMEUPC_KEY` / `GAMEUPC_MODE`) : test sans clé,
+     puis vraie clé sur l'endpoint de test, puis prod — pour valider avant de toucher aux
+     données réelles, sans changer le code.
 3. **Secrets** (Edge Functions → Secrets) : `BGG_TOKEN` = jeton d'application BGG
    (géré sur boardgamegeek.com/applications ; un jeton peut expirer). `GAMEUPC_KEY` = clé
-   d'API gameupc.com (optionnelle tant qu'on teste ; absente = mode test).
+   d'API gameupc.com (absente = endpoint de test + clé de démo, seuls les UPC de test
+   répondent). `GAMEUPC_MODE` = `prod` pour basculer sur les données de production (`/v1`) ;
+   absent ou toute autre valeur = endpoint de test (`/test`), même avec la vraie clé — idéal
+   pour valider le dev sans polluer les données réelles ni le vote crowdsourcé.
 4. **Authentication** :
    - Sign In / Providers : **désactiver « Allow new users to sign up »** ; laisser
      « Confirm email » activé.

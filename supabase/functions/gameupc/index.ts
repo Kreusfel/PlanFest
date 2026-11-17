@@ -20,10 +20,15 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// Mode prod si la clé réelle est fournie en secret (endpoint /v1 = données de production),
-// sinon mode test (endpoint /test + clé de démo publique, seuls les UPC de test répondent).
+// Choix de l'endpoint, du plus sûr au plus engageant :
+//   - pas de clé            → /test + clé de démo (seuls les UPC de test répondent) ;
+//   - clé + GAMEUPC_MODE≠prod→ /test + VRAIE clé (valider le dev sans toucher aux données de
+//                              prod ni polluer le crowdsourcing — recommandé par gameupc) ;
+//   - clé + GAMEUPC_MODE=prod→ /v1 + vraie clé (données de production).
+// La bascule en prod est donc un geste explicite : poser la clé seule ne suffit pas.
 const KEY = Deno.env.get("GAMEUPC_KEY");
-const BASE = KEY ? "https://api.gameupc.com/v1" : "https://api.gameupc.com/test";
+const PROD = !!KEY && Deno.env.get("GAMEUPC_MODE") === "prod";
+const BASE = PROD ? "https://api.gameupc.com/v1" : "https://api.gameupc.com/test";
 const apiHeaders: Record<string, string> = { "x-api-key": KEY || "test_test_test_test_test" };
 
 // gameupc renvoie une liste bgg_info ; on n'en garde que l'essentiel pour le navigateur.
