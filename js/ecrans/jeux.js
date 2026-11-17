@@ -694,7 +694,7 @@ function ficheEditView() {
         ${w ? `<button class="btn small danger" id="suppr-jeu" style="margin-top:10px">Supprimer ce jeu du catalogue</button>` : ""}
         ${BGG}
       </div>
-      <div class="r">${mallesDe(j.id).length ? blocMalles(j) : ""}${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
+      <div class="r">${j.ludotheque || mallesDe(j.id).length ? blocMalles(j) : ""}${je ? blocFestival(j, je, ro) : `<div class="card"><h2>Ce festival</h2>
           <p class="muted">Ce jeu n'est pas prévu pour ce festival.</p>
           ${w ? `<button class="btn primary" data-aufestival="${j.id}">Ajouter au festival</button>` : ""}</div>`}</div>
     </div>
@@ -702,16 +702,22 @@ function ficheEditView() {
 }
 function blocMalles(j) {
   const w = canMalles(), ms = mallesDe(j.id);
+  const dispo = nomsEcoles().filter((n) => !ms.some((m) => m.malle === n));
+  // Contrôle d'ajout (optionnel) : on peut mettre n'importe quel jeu de l'asso dans une malle.
+  const ajoutCtrl = !w ? "" : dispo.length
+    ? `<div class="lier-bgg"><select id="f-malle" aria-label="Malle de l'école">${dispo.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("")}</select>
+        <button class="btn small" data-madd="${j.id}">Ajouter à une malle</button></div>`
+    : `<p class="mini">${ecoles.length ? "Déjà dans la malle de chaque école." : `Aucune école retenue (<a href="#/intergeneration">Intergénérationnel → Écoles</a>).`}</p>`;
+  if (!ms.length) {
+    // Pas dans une malle : présenter l'ajout comme une action, sans sous-entendre une présence.
+    return `<div class="card"><h2>Malles des écoles</h2>
+      <p class="muted">Ce jeu n'est dans aucune malle. Tu peux l'ajouter à une malle d'école :</p>
+      ${ajoutCtrl || `<p class="mini">Aucune malle à gérer ici.</p>`}</div>`;
+  }
   return `<div class="card"><h2>Malles des écoles</h2>
-    <p class="mini">Utilisation : ${esc(usageTexte(j))} · ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}
-      ${manque(j) ? ` <span class="pill alert">manque ${manque(j)}</span>` : ""}</p>
-    ${ms.length ? `<div class="chk-row">${ms.map((m) => `<span class="pill grey">${esc(m.malle)}${w ? ` <button class="link" data-mdel="${m.id}" aria-label="Retirer de la malle ${esc(m.malle)}">×</button>` : ""}</span>`).join(" ")}</div>` : `<p class="muted">Dans aucune malle.</p>`}
-    ${w ? (() => {
-      const dispo = nomsEcoles().filter((n) => !ms.some((m) => m.malle === n));
-      return dispo.length ? `<div class="lier-bgg"><select id="f-malle" aria-label="Malle de l'école">${dispo.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("")}</select>
-        <button class="btn small" data-madd="${j.id}">Ajouter à la malle</button></div>`
-        : `<p class="mini">${ecoles.length ? "Déjà dans la malle de chaque école." : `Aucune école retenue (<a href="#/intergeneration">Intergénérationnel → Écoles</a>).`}</p>`;
-    })() : ""}</div>`;
+    <p class="mini">Dans ${plur(ms.length, "malle", "malles")} · ${plur(possedes(j), "exemplaire possédé", "exemplaires possédés")}${manque(j) ? ` <span class="pill alert">manque ${manque(j)}</span>` : ""}</p>
+    <div class="chk-row">${ms.map((m) => `<span class="pill grey">${esc(m.malle)}${w ? ` <button class="link" data-mdel="${m.id}" aria-label="Retirer de la malle ${esc(m.malle)}">×</button>` : ""}</span>`).join(" ")}</div>
+    ${ajoutCtrl}</div>`;
 }
 function blocFestival(j, je, ro) {
   const a = animFor(j);
