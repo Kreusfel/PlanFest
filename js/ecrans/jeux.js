@@ -420,50 +420,71 @@ function pretsView() {
   }).join("");
 }
 
-/* ---------- onglet À obtenir ---------- */
-// Liste de travail : jeux du festival qu'on n'a pas (à demander aux éditeurs, puis ailleurs),
-// demandes en cours (obtenu → comment ; refusé → chercher ailleurs), manques des malles.
+/* ---------- onglet À obtenir (kanban façon maquette) ---------- */
+// Pastille colorée avec l'initiale du jeu (couleur stable d'après le titre).
+const AVJ = [["var(--blue-tint)", "var(--blue)"], ["var(--purple-tint)", "var(--purple)"], ["#F3D9C4", "#7A3E14"],
+  ["#F6D5D5", "#8A2B2B"], ["#D5E6E2", "#0E4F4F"], ["var(--green-tint)", "var(--green)"], ["var(--accent-tint)", "var(--accent-dark)"]];
+const avatarJeu = (j) => { const [bg, c] = AVJ[(j.titre.charCodeAt(0) || 0) % AVJ.length]; return `<span class="avatar" aria-hidden="true" style="background:${bg};color:${c}">${esc((j.titre[0] || "?").toUpperCase())}</span>`; };
+// Jours depuis le dernier contact de l'éditeur (proxy du « sans réponse depuis »).
+const joursDemande = (je) => { const ed = jeux.get(je.jeu_id).editeur_id; const d = ed ? edStatut.get(ed)?.dernier_contact : null; return d ? Math.round((Date.now() - new Date(d + "T00:00:00").getTime()) / 86400000) : null; };
+const editeurDe = (je) => { const ed = jeux.get(je.jeu_id).editeur_id; return ed && !(je.notes || "").includes(`Refusé par ${orgNom(ed)}`) ? ed : ""; };
+
 function obtenirView() {
   const w = canWrite(), afaire = aObtenirFestival();
-  const aDemander = afaire.filter((je) => je.statut === "souhaite");
-  const enCours = afaire.filter((je) => je.statut === "demande");
-  // À demander : par éditeur (sans éditeur à part).
-  const parEd = new Map();
-  // Un jeu déjà refusé par son éditeur va dans « À chercher ailleurs ».
-  const groupeDe = (je) => { const ed = jeux.get(je.jeu_id).editeur_id; return ed && !(je.notes || "").includes(`Refusé par ${orgNom(ed)}`) ? ed : ""; };
-  aDemander.forEach((je) => { const ed = groupeDe(je); if (!parEd.has(ed)) parEd.set(ed, []); parEd.get(ed).push(je); });
-  const groupes = [...parEd.entries()].sort((a, b) => (a[0] ? orgNom(a[0]) : "zzz").localeCompare(b[0] ? orgNom(b[0]) : "zzz", "fr")).map(([ed, liste]) => {
-    const org = orgs.find((o) => o.id === ed), titres = liste.map((je) => jeux.get(je.jeu_id).titre).sort((a, b) => a.localeCompare(b, "fr"));
-    const st = ed ? edStatut.get(ed) : null;
-    const stTxt = st ? `<span class="tag ${({ confirme: "ok", refuse: "bad" })[st.statut] || "warn"}">${esc(({ invite: "à contacter", relance: "à relancer", confirme: "confirmé", refuse: "refusé" })[st.statut] || st.statut)}${st.dernier_contact ? " · contacté le " + esc(st.dernier_contact) : ""}</span>` : "";
-    return `<div class="card"><div class="ihead"><h3>${ed ? `<a class="link" href="#/organismes/editeurs">${esc(orgNom(ed))}</a>` : "À chercher ailleurs"} ${stTxt}</h3><span class="muted">${plur(liste.length, "jeu", "jeux")}</span></div>
-      ${org?.contact_email ? `<p class="mini">Contact : <a href="mailto:${esc(org.contact_email)}">${esc(org.contact_email)}</a></p>` : ed ? `<p class="mini">Pas d'e-mail sur la fiche de l'éditeur.</p>` : `<p class="mini">À demander à la ludothèque, à une boutique partenaire, ou à acheter.</p>`}
-      <ul class="reg-list">${liste.map((je) => `<li class="clk" data-open="${je.jeu_id}">${esc(jeux.get(je.jeu_id).titre)}${je.notes ? ` <span class="muted">— ${esc(je.notes.split("\n").slice(-1)[0])}</span>` : ""}</li>`).join("")}</ul>
-      <div class="head-actions" style="justify-content:flex-start">
-        <button class="btn small" data-copietitres="${esc(titres.join("\n"))}">Copier la liste</button>
-        ${w ? `<button class="btn small primary" data-demande="${esc(ed || "?")}">${ed ? "Demandé à l'éditeur" : "Marquer demandé…"}</button>` : ""}</div></div>`;
-  }).join("");
-  const lignesCours = enCours.sort((a, b) => (a.provenance_detail || "").localeCompare(b.provenance_detail || "", "fr")).map((je) => {
-    const j = jeux.get(je.jeu_id);
-    return `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td>
-      <td class="muted">${esc(je.provenance_detail || "—")}</td>
-      <td>${w ? `<div class="chk-row"><select data-obtenu="${je.id}" aria-label="Obtenu comment"><option value="">Obtenu ?</option>${PROVENANCES.map(([k, l]) => `<option value="${k}">par ${l.toLowerCase()}</option>`).join("")}</select>
-        <button class="btn small" data-refus="${je.id}">Refusé</button></div>` : ""}</td></tr>`;
-  }).join("");
+  const souhait = afaire.filter((je) => je.statut === "souhaite");
+  const demande = afaire.filter((je) => je.statut === "demande");
+  const recu = afaire.filter((je) => je.statut === "recu");
+  const nom = (je) => jeux.get(je.jeu_id).titre;
+  const tete = (je) => `<div class="kan-card-top">${avatarJeu(jeux.get(je.jeu_id))}
+    <div class="row-main"><span class="kan-card-name clk" data-open="${je.jeu_id}">${esc(nom(je))}</span>`;
+
+  const cardSouhait = (je) => { const ed = editeurDe(je), nomEd = ed ? orgNom(ed) : "";
+    return `<li class="kan-card">${tete(je)}<span class="kan-sub">${jeux.get(je.jeu_id).annee || ""}</span></div></div>
+      <div class="kan-note">${ed ? `À demander à <b>${esc(nomEd)}</b> · éditeur` : "À demander à une ludothèque, une boutique, ou à acheter"}</div>
+      ${w ? `<button class="btn small" style="margin-top:10px" data-demande="${esc(ed || "?")}">✉ ${ed ? "Demander à " + esc(nomEd) : "Marquer demandé…"}</button>` : ""}</li>`;
+  };
+  const cardDemande = (je) => { const jo = joursDemande(je), stale = jo != null && jo > 15;
+    return `<li class="kan-card${stale ? " alert" : ""}">${tete(je)}<span class="kan-sub">Demandé à ${esc(je.provenance_detail || "?")}</span></div></div>
+      ${stale ? `<div class="kan-stale">⚠ Sans réponse depuis ${jo} jours</div>` : ""}
+      ${w ? `<div class="kan-obtenu"><div class="kan-obtenu-q">Il a été obtenu comment ?</div><div class="kan-obtenu-btns">
+        <button class="btn small" data-obtenuprov="${je.id}|don">Don</button>
+        <button class="btn small" data-obtenuprov="${je.id}|achat">Achat</button>
+        <button class="btn small primary" data-obtenuprov="${je.id}|pret">Prêt</button></div>
+        <button class="btn small" style="margin-top:6px" data-refus="${je.id}">Refusé : chercher ailleurs</button></div>` : ""}</li>`;
+  };
+  const cardRecu = (je) => {
+    const statut = je.provenance === "pret" ? `<span class="pill grey">Hors ludothèque${je.rendu ? " · rendu" : " · à rendre"}</span>` : `<span class="pill grey">Entré en ludothèque</span>`;
+    const dest = (je.usages || []).map((u) => `<span class="pill grey">${esc(usageLbl(u))}</span>`).join(" ");
+    return `<li class="kan-card">${tete(je)}<span class="kan-sub">${esc(provLbl(je.provenance))}${je.provenance_detail ? " · " + esc(je.provenance_detail) : ""}</span></div></div>
+      <div class="kan-destins"><span class="pill ok">✓ ${esc(provLbl(je.provenance))}</span>${statut}</div>
+      ${dest ? `<div class="kan-destins">${dest}</div>` : ""}</li>`;
+  };
+
+  const col = (cls, titre, items, render) => `<section class="kan-col ${cls}"><div class="kan-head"><h3>${esc(titre)}</h3><span class="count">${items.length}</span></div>
+    <ul class="kan-list">${items.slice(0, 40).map(render).join("") || `<li class="kan-card"><span class="muted">Rien ici pour l'instant.</span></li>`}</ul>
+    ${items.length > 40 ? `<p class="mini" style="text-align:center">… et ${items.length - 40} autres (voir l'onglet Jeux).</p>` : ""}</section>`;
+
+  const prets = groupesPrets();
+  const pretsTable = prets.length ? `<section class="card" style="margin-top:24px"><div class="dash-panel-head"><h2>Prêts à restituer <span class="pill grey">${prets.length}</span></h2></div>
+    <div class="scroll"><table class="data-table"><thead><tr><th>Prêteur</th><th>Jeux prêtés</th><th>À rendre</th><th></th></tr></thead><tbody>
+    ${prets.map(([k, g]) => `<tr><td><b>${esc(g.nom)}</b></td>
+      <td class="muted">${esc(g.lignes.map((je) => nom(je)).sort((a, b) => a.localeCompare(b, "fr")).join(", "))}</td>
+      <td>${g.lignes.filter((je) => !je.rendu).length} à rendre</td>
+      <td style="text-align:right"><button class="btn small" data-bon="${esc(k)}">Bon de restitution</button></td></tr>`).join("")}
+    </tbody></table></div></section>` : "";
+
   const ao = aObtenir();
-  const malles = ao.length ? `<div class="card"><div class="ihead"><h3>Pour les malles des écoles</h3><span class="tag bad">${ao.length}</span>
+  const malles = ao.length ? `<section class="card" style="margin-top:24px"><div class="dash-panel-head"><h2>Exemplaires manquants pour les malles <span class="pill alert">${ao.length}</span>
       <button class="btn small" id="copier-obtenir">Copier la liste</button></div>
     <div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Manque</th><th>Possédés</th><th>Utilisation</th></tr></thead><tbody>
-    ${ao.map((j) => `<tr><td class="clk" data-open="${j.id}"><b>${esc(j.titre)}</b></td><td><span class="tag bad">${manque(j)}</span></td>
-      <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></div>` : "";
+    ${ao.map((j) => `<tr><td><b class="clk" data-open="${j.id}">${esc(j.titre)}</b></td><td><span class="pill alert">${manque(j)}</span></td>
+      <td>${possedes(j)}</td><td class="muted">${esc(usageTexte(j))}</td></tr>`).join("")}</tbody></table></div></section>` : "";
+
   if (!afaire.length && !ao.length) return `<div class="card"><p class="muted">Rien à obtenir : tous les jeux du festival sont là. 🎉</p></div>`;
-  return `<h2 class="sect-title">À demander <span class="muted">${aDemander.length}</span></h2>
-    ${groupes || `<div class="card"><p class="muted">Rien à demander.</p></div>`}
-    <h2 class="sect-title">Demandes en cours <span class="muted">${enCours.length}</span></h2>
-    ${enCours.length ? `<div class="card"><div class="scroll"><table class="data-table"><thead><tr><th>Jeu</th><th>Demandé à</th><th></th></tr></thead><tbody>${lignesCours}</tbody></table></div>
-      <p class="mini">Obtenu : choisis comment (pour un prêt, le prêteur sera celui à qui tu l'as demandé). Refusé : le jeu revient dans « À demander », avec une note.</p></div>`
-      : `<div class="card"><p class="muted">Aucune demande en cours.</p></div>`}
-    ${malles}`;
+  return `<div class="kanban">
+    ${col("a", "À obtenir", souhait, cardSouhait)}
+    ${col("d", "Demandé", demande, cardDemande)}
+    ${col("o", "Obtenu", recu, cardRecu)}</div>${pretsTable}${malles}`;
 }
 
 function triView() {
@@ -696,6 +717,8 @@ async function onClick(e) {
     return;
   }
   if (t.closest("[data-scan-cam]")) { const code = await ouvrirScan(); if (code) await scanner(code); return; }
+  const op = t.closest("[data-obtenuprov]");
+  if (op) { const [id, prov] = op.dataset.obtenuprov.split("|"); return obtenu(id, prov); }
   const tb = t.closest("[data-tab]");
   if (tb) { tab = tb.dataset.tab; mode = "list"; return go(); }
   if (t.closest("#retour")) {
