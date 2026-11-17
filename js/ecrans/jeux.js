@@ -324,9 +324,10 @@ function ludoView() {
       const img = j.miniature_url || j.image_url, cur = choix.get(j.id);
       const btns = CHOIX.map(([k, l, cls]) => `<button class="niv${cur === k ? " on " + cls : ""}" aria-pressed="${cur === k}" data-choix="${j.id}|${k}"${w ? "" : " disabled"}>${l}</button>`).join("");
       // Destination = où va le jeu pour ce festival (choix Oui/Bar + malles des écoles).
-      const dest = [];
-      if (cur === "oui") dest.push(`<span class="pill ok">Animation</span>`);
-      else if (cur === "bar") dest.push(`<span class="pill amber">Bar à jeux</span>`);
+      const dest = [], u = sel.get(j.id)?.usages || [];
+      if (u.includes("animation")) dest.push(`<span class="pill ok">Animation</span>`);
+      if (u.includes("bar")) dest.push(`<span class="pill amber">Bar à jeux</span>`);
+      if (u.includes("tombola")) dest.push(`<span class="pill grey">Tombola</span>`);
       if (mallesDe(j.id).length) dest.push(`<span class="pill grey">Malles</span>`);
       return `<tr>
         <td class="clk" data-open="${j.id}"><div class="ludo-cell"><span class="ludo-thumb">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
@@ -468,10 +469,8 @@ function obtenirView() {
 
   // Destinations d'un jeu pour ce festival (malle / animation / bar à jeux) — multiple possible.
   const destinationsDe = (j) => {
-    const d = new Set(), cur = choix.get(j.id), je = sel.get(j.id);
-    if (cur === "oui") d.add("animation");
-    if (cur === "bar") d.add("bar");
-    (je?.usages || []).forEach((u) => d.add(u));
+    // Les cases Usages de la fiche font foi (animation / bar / tombola) ; + malle si en malle.
+    const d = new Set(sel.get(j.id)?.usages || []);
     if (mallesDe(j.id).length) d.add("malle");
     return d;
   };
@@ -1315,7 +1314,7 @@ async function enregistrer() {
     ePatch = { statut: asso ? "deja_asso" : (st && st !== "deja_asso" ? st : "souhaite"),
       ...(e("provenance") ? { provenance: e("provenance").value, provenance_detail: (e("provenance_detail")?.value || "").trim() || null } : {}),
       ...(e("rendu") ? { rendu: e("rendu").checked, rendu_le: e("rendu").checked ? (je.rendu_le || aujourdhui()) : null } : {}),
-      exemplaires: numOrNull(e("exemplaires").value) || 1, usages: usages.length ? usages : ["animation"],
+      exemplaires: numOrNull(e("exemplaires").value) || 1, usages,
       element_id: e("element_id").value || null, notes: e("notes").value || null };
   }
   if (ePatch && !asso) {
