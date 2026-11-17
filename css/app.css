@@ -454,6 +454,14 @@ input[type=color]{padding:3px;height:44px}
 .pub-chk{margin:6px 0}
 .scan-form{display:flex;gap:6px;align-items:center}
 .scan-form input{width:150px;margin:0}
+/* Scan caméra plein écran (BarcodeDetector). Au-dessus de tout, barre d'outils comprise. */
+.scan-cam{position:fixed;inset:0;z-index:1100;background:#000;display:flex;flex-direction:column}
+.scan-cam-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:#fff;font-weight:600;font-size:14px;background:rgba(0,0,0,.6)}
+.scan-cam-stage{position:relative;flex:1;overflow:hidden}
+.scan-cam-video{width:100%;height:100%;object-fit:cover;background:#000;display:block}
+.scan-cam-cadre{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;
+  width:min(80vw,340px);height:150px;border:2px solid #fff;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35)}
 .lier-bgg{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .lier-bgg input{flex:1;min-width:180px;margin:0}
 .heures{display:flex;align-items:center;gap:4px}

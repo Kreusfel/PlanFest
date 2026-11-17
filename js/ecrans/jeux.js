@@ -13,6 +13,7 @@ import { supa } from "../supabase.js";
 import { isAdmin, hasPole } from "../auth.js";
 import { store } from "../store.js";
 import { esc, plur, toast, aujourdhui } from "../ui/util.js";
+import { ouvrirScan, fermerScan, scanDisponible } from "../ui/scan.js";
 import { bonRestitution } from "../export/restitution.js";
 import { blocContreparties, actionContrepartie } from "../ui/contreparties.js";
 import { parseCSV, norm } from "../ui/csv.js";
@@ -312,7 +313,7 @@ function ludoView() {
     <div class="filters">
       <input id="l-q" class="grow" placeholder="Rechercher un titre…" value="${esc(ludoQ)}" aria-label="Rechercher dans la ludothèque">
       <button class="btn small${ludoNonDecides ? " primary" : ""}" id="l-nd">Non décidés (${nd})</button>
-      ${w ? `<form id="scan-form" class="scan-form"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre" aria-label="Scanner ou taper un code-barre"><button class="btn small" type="submit">OK</button></form>` : ""}
+      ${w ? `<form id="scan-form" class="scan-form"><input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre" aria-label="Scanner ou taper un code-barre"><button class="btn small" type="submit">OK</button>${scanDisponible() ? `<button class="btn small" type="button" data-scan-cam aria-label="Scanner avec la caméra">📷</button>` : ""}</form>` : ""}
       ${w ? `<button class="btn small" id="l-tri">Trier rapidement</button><button class="btn small" id="l-csv">Import CSV</button>` : ""}
     </div>
     <p class="mini">Pour ce festival : <b>${c.oui}</b> oui · <b>${c.bar}</b> bar à jeux · <b>${c.non}</b> non. « Oui » et « Bar » ajoutent le jeu à l'onglet Festival.</p>
@@ -481,6 +482,7 @@ function ajoutView() {
       ${origineChoix("a")}
       <form id="scan-form" class="jeux-filters">
         <input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre (douchette ou clavier)" value="${esc(ajout.ean)}" aria-label="Code-barre">
+        ${scanDisponible() ? `<button class="btn" type="button" data-scan-cam aria-label="Scanner avec la caméra">📷 Scanner</button>` : ""}
         <button class="btn" type="submit">Chercher le code</button>
       </form>
       ${ajout.ean ? `<p class="sync-warn">Code ${esc(ajout.ean)} : il sera enregistré avec le jeu que tu choisis ci-dessous.</p>` : ""}
@@ -642,6 +644,8 @@ function wireOnce() {
   root.addEventListener("change", onChange);
   root.addEventListener("submit", onSubmit);
 }
+// Quitter l'écran coupe la caméra si un scan était ouvert (appelé par le routeur).
+export function unmount() { fermerScan(null); }
 const msgEl = () => root.querySelector("#j-msg") || root.querySelector("#a-msg") || root.querySelector("#m-msg");
 const dire = (t) => { const m = msgEl(); if (m) m.textContent = t; };
 
@@ -660,6 +664,7 @@ async function onClick(e) {
     if (await actionContrepartie(t, contreparties, contexteContrepartieJeu)) go();
     return;
   }
+  if (t.closest("[data-scan-cam]")) { const code = await ouvrirScan(); if (code) await scanner(code); return; }
   const tb = t.closest("[data-tab]");
   if (tb) { tab = tb.dataset.tab; mode = "list"; return go(); }
   if (t.closest("#retour")) {

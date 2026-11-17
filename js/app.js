@@ -40,7 +40,7 @@ const SCREENS = {
   "/repartition": repartition,
   "/jeux": jeux,
   // Ancienne adresse : la ludothèque est un onglet de « Jeux ».
-  "/ludotheque": { render: (c) => jeux.render(c, "ludo") },
+  "/ludotheque": { render: (c) => jeux.render(c, "ludo"), unmount: jeux.unmount },
   "/permanences": permanences,
   "/terrain": terrain,
   // Ancienne adresse : « Mon planning » est désormais un onglet de « Sur le terrain ».

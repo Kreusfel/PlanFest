@@ -35,8 +35,9 @@ js/plan/            éditeur de plan (modèle, rendu, annuler/refaire, autosave,
 js/export/          PDF (plan, montage, étiquettes, fiches, permanences), QR codes
 js/offline/         files IndexedDB du jour J
 js/ui/util.js       utilitaires partagés (esc, safeUrl, toast, dates…)
+js/ui/scan.js       scan code-barre par la caméra (BarcodeDetector, Chrome Android)
 supabase/migrations 001 → 052, à exécuter dans l'ordre
-supabase/functions  Edge Functions : inviter, bgg-import
+supabase/functions  Edge Functions : inviter, bgg-import, gameupc
 supabase/seed_demo.sql  données fictives de démonstration (facultatif)
 docs/archive/       ancien brief et maquette d'origine (historique, non utilisés)
 ```
@@ -49,6 +50,12 @@ permanences, « en cours » / « ensuite »), **Programme** (recherche, en cours
 et **Plan** (recherche d'une table, détail de ce qui s'y passe). Les données viennent
 d'un seul appel (`terrain()`, migration 034) et restent consultables hors ligne.
 Les écrans d'édition sont faits pour l'ordinateur.
+
+Dans **Jeux → Ajouter**, un code-barre peut être saisi de trois façons : **caméra**
+(bouton 📷, Chrome Android — bouton masqué si le navigateur ne sait pas le faire, ex.
+Safari/iOS), **douchette** (lecteur USB/Bluetooth qui tape les chiffres puis Entrée) ou
+**à la main**. Un code connu ouvre la fiche du jeu ; un code inconnu est résolu en jeu via
+l'Edge Function `gameupc` (voir Installation).
 
 ## Comptes et droits
 
