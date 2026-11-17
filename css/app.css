@@ -343,11 +343,20 @@ input[type=color]{padding:3px;height:44px}
 .kan-obtenu{margin-top:10px;padding:10px;border-radius:12px;background:var(--bg);border:1.5px solid var(--ink)}
 .kan-obtenu-q{font-size:13px;font-weight:700;margin-bottom:8px}
 .kan-obtenu-btns{display:flex;gap:6px;flex-wrap:wrap}
-/* ---------- Ajouter un jeu : 3 colonnes (maquette) ---------- */
-.ajout-cols{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
-.ajout-methodes{flex:1 1 240px;min-width:220px;display:flex;flex-direction:column;gap:10px}
-.ajout-res{flex:2 1 320px;min-width:260px}
-.ajout-ou{flex:1 1 220px;min-width:200px;background:var(--bg);border:1.5px solid var(--line);border-radius:14px;padding:14px}
+/* ---------- Ajouter un jeu : modale 3 colonnes (maquette) ---------- */
+.modal{max-width:1100px;margin:0 auto;background:var(--surface);border:1.5px solid var(--line);border-radius:24px;box-shadow:0 20px 50px rgba(30,42,50,.15);overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1.5px solid var(--line)}
+.modal-head h1{margin:0;font-size:24px}
+.modal-body{display:flex;flex-wrap:wrap}
+.modal-col{padding:20px}
+.modal-col.methodes{flex:1 1 230px;min-width:200px;background:var(--bg);border-right:1.5px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.modal-col.mid{flex:2 1 320px;min-width:260px;display:flex;flex-direction:column;gap:12px}
+.modal-col.ou{flex:1 1 230px;min-width:200px;border-left:1.5px solid var(--line);background:var(--bg)}
+.meth{display:flex;flex-direction:column;gap:2px;text-align:left;padding:12px 14px;border-radius:12px;border:2px solid transparent;background:transparent;cursor:pointer;color:var(--ink)}
+.meth:hover{background:var(--surface)}
+.meth.on{border-color:var(--primary);background:var(--primary-tint)}
+.meth-t{font-weight:700;font-size:15px}
+.meth-d{font-size:13px;color:var(--muted)}
 /* ---------- Fiche jeu : vue lecture (maquette) ---------- */
 .fil{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted);margin-bottom:14px}
 .fil .link{padding:0}

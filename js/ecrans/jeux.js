@@ -529,31 +529,33 @@ function ajoutView() {
       : `<p class="muted">Rien de plus sur BGG.</p>`);
   })();
   const res = `${loc}${bgg}` || `<p class="muted">Scanne un code-barre ou cherche un nom pour voir des résultats.</p>`;
-  return `<div class="page-head"><div><h1>Ajouter un jeu</h1><div class="sub">On cherche d'abord dans nos jeux, puis sur BoardGameGeek</div></div>
-    <div class="head-actions"><button class="btn" id="retour">← Jeux</button></div></div>
-    <div class="card">
-      <div class="ajout-cols">
-        <div class="ajout-methodes">
-          <div class="lbl">Comment l'ajouter ?</div>
-          <form id="scan-form" class="jeux-filters">
-            <input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre (douchette ou clavier)" value="${esc(ajout.ean)}" aria-label="Code-barre">
-            ${scanDisponible() ? `<button class="btn" type="button" data-scan-cam aria-label="Scanner avec la caméra">📷 Scanner</button>` : ""}
-            <button class="btn" type="submit">Chercher le code</button>
-          </form>
-          ${ajout.ean ? `<p class="sync-warn">Code ${esc(ajout.ean)} : il sera enregistré avec le jeu que tu choisis.</p>` : ""}
-          <form id="a-form" class="jeux-filters">
-            <input id="a-q" placeholder="Nom du jeu, ou lien BGG collé…" value="${esc(ajout.q)}" aria-label="Nom du jeu ou lien BGG" autocomplete="off">
-            <button class="btn primary" type="submit">Chercher sur BGG</button>
-          </form>
-          <p class="mini">Introuvable ?</p>
-          <div class="filters">
-            <button class="btn small" id="to-manuel">Saisir à la main</button>
-            <button class="btn small" id="to-csv">Import CSV (ludothèque)</button></div>
-        </div>
-        <div class="ajout-res"><p class="msg" id="a-msg">${esc(ajout.msg)}</p><div id="a-res">${res}</div></div>
-        <div class="ajout-ou"><div class="lbl">Où l'ajouter ?</div>${origineChoix("a")}</div>
+  const m = ajout.methode === "scan" ? "scan" : "nom";
+  const meth = (key, titre, desc, attr) => `<button type="button" class="meth${m === key ? " on" : ""}" ${attr}>
+    <span class="meth-t">${esc(titre)}</span><span class="meth-d">${esc(desc)}</span></button>`;
+  const warn = ajout.ean ? `<p class="sync-warn">Code ${esc(ajout.ean)} : il sera enregistré avec le jeu que tu choisis.</p>` : "";
+  const mid = m === "scan"
+    ? `<form id="scan-form" class="jeux-filters">
+        <input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre (douchette ou clavier)" value="${esc(ajout.ean)}" aria-label="Code-barre">
+        ${scanDisponible() ? `<button class="btn" type="button" data-scan-cam aria-label="Scanner avec la caméra">📷 Scanner</button>` : ""}
+        <button class="btn primary" type="submit">Chercher le code</button></form>${warn}
+      <div id="a-res">${res}</div>`
+    : `<form id="a-form" class="jeux-filters">
+        <input id="a-q" placeholder="Nom du jeu, ou lien BGG collé…" value="${esc(ajout.q)}" aria-label="Nom du jeu ou lien BGG" autocomplete="off">
+        <button class="btn primary" type="submit">Chercher sur BGG</button></form>${warn}
+      <p class="msg" id="a-msg">${esc(ajout.msg)}</p><div id="a-res">${res}</div>`;
+  return `<div class="modal">
+    <div class="modal-head"><h1>Ajouter un jeu</h1><button class="btn small" id="retour">✕ Fermer</button></div>
+    <div class="modal-body">
+      <div class="modal-col methodes">
+        <div class="lbl">Comment l'ajouter ?</div>
+        ${meth("scan", "Scanner un code-barre", "Caméra, douchette ou saisie du numéro", `data-methode="scan"`)}
+        ${meth("nom", "Chercher par nom", "Remplissage auto depuis BoardGameGeek", `data-methode="nom"`)}
+        ${meth("manuel", "Saisir à la main", "Pour un jeu rare ou fait maison", `id="to-manuel"`)}
+        ${meth("csv", "Importer un CSV", "Reprendre une liste d'un seul coup", `id="to-csv"`)}
       </div>
-      ${BGG}</div>`;
+      <div class="modal-col mid">${mid}</div>
+      <div class="modal-col ou"><div class="lbl">Où l'ajouter ?</div>${origineChoix("a")}</div>
+    </div>${BGG}</div>`;
 }
 // Choix « jeu de l'asso / jeu à obtenir » (+ « le prendre pour ce festival », ou provenance), commun à
 // la recherche et à la saisie à la main. Préfixe = a (ajout) ou m (manuel).
@@ -788,6 +790,8 @@ async function onClick(e) {
   if (t.closest("[data-scan-cam]")) { const code = await ouvrirScan(); if (code) await scanner(code); return; }
   const op = t.closest("[data-obtenuprov]");
   if (op) { const [id, prov] = op.dataset.obtenuprov.split("|"); return obtenu(id, prov); }
+  const me = t.closest("[data-methode]");
+  if (me) { ajout.methode = me.dataset.methode; return go(); }
   const tb = t.closest("[data-tab]");
   if (tb) { tab = tb.dataset.tab; mode = "list"; return go(); }
   if (t.closest("#retour")) {
@@ -907,6 +911,7 @@ async function scanner(v) {
   if (j) { ficheId = j.id; ficheMode = "lecture"; mode = "fiche"; window.scrollTo(0, 0); go(); if (!sel.has(j.id)) toast(`« ${j.titre} » : pas encore au festival.`, "warn"); return; }
   if (mode !== "ajout") ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: code, prov: "don", detail: "", upcStatus: null };
   else { ajout.ean = code; ajout.upcStatus = null; }
+  ajout.methode = "scan";
   mode = "ajout"; go();
   await chercherParCode(code);
 }
