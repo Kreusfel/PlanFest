@@ -500,18 +500,20 @@ function obtenirView() {
       <td style="text-align:right"><button class="btn small" data-bon="${esc(k)}">Bon de restitution</button></td></tr>`).join("")}
     </tbody></table></div></section>` : "";
 
-  // Listes par destination : uniquement ce qui reste À OBTENIR (manque d'exemplaires) pour chaque usage.
+  // Listes par destination : vue d'ensemble de TOUS les jeux par usage (pas seulement ce qui
+  // manque). Le « manque » est juste signalé en bout de ligne quand il y en a.
+  const parDest = (dest) => [...jeux.values()].filter((j) => destinationsDe(j).has(dest)).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
   const listeDest = (titre, dest) => {
-    const items = aObtenir().filter((j) => destinationsDe(j).has(dest)).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+    const items = parDest(dest);
     if (!items.length) return "";
-    return `<section class="card" style="margin-top:16px"><div class="dash-panel-head"><h2>${esc(titre)} <span class="pill alert">${items.length}</span></h2></div>
+    return `<section class="card" style="margin-top:16px"><div class="dash-panel-head"><h2>${esc(titre)} <span class="pill grey">${items.length}</span></h2></div>
       <div class="list">${items.map((j) => `<div class="row">${avatarJeu(j)}<div class="row-main">
         <b class="kan-card-name clk" data-open="${j.id}">${esc(j.titre)}</b>
-        <span class="muted">manque ${manque(j)} · ${possedes(j)}/${besoin(j)} · ${esc(usageTexte(j))}</span></div></div>`).join("")}</div></section>`;
+        <span class="muted">${esc(usageTexte(j))}${manque(j) ? ` · <span class="alert-txt">manque ${manque(j)}</span>` : ""}</span></div></div>`).join("")}</div></section>`;
   };
-  const dests = listeDest("À obtenir pour les malles", "malle")
-    + listeDest("À obtenir pour l'animation", "animation")
-    + listeDest("À obtenir pour le bar à jeux", "bar");
+  const dests = listeDest("Pour les malles", "malle")
+    + listeDest("Pour l'animation", "animation")
+    + listeDest("Pour le bar à jeux", "bar");
 
   return `<div class="kanban">
     ${colH("a", "À obtenir", aObtenirCount, aObtenirInner)}
