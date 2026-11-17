@@ -424,7 +424,12 @@ function pretsView() {
 // Pastille colorée avec l'initiale du jeu (couleur stable d'après le titre).
 const AVJ = [["var(--blue-tint)", "var(--blue)"], ["var(--purple-tint)", "var(--purple)"], ["#F3D9C4", "#7A3E14"],
   ["#F6D5D5", "#8A2B2B"], ["#D5E6E2", "#0E4F4F"], ["var(--green-tint)", "var(--green)"], ["var(--accent-tint)", "var(--accent-dark)"]];
-const avatarJeu = (j) => { const [bg, c] = AVJ[(j.titre.charCodeAt(0) || 0) % AVJ.length]; return `<span class="avatar" aria-hidden="true" style="background:${bg};color:${c}">${esc((j.titre[0] || "?").toUpperCase())}</span>`; };
+const avatarJeu = (j) => {
+  const img = j.miniature_url || j.image_url;
+  if (img) return `<span class="avatar avatar-img" aria-hidden="true"><img src="${esc(img)}" alt="" loading="lazy"></span>`;
+  const [bg, c] = AVJ[(j.titre.charCodeAt(0) || 0) % AVJ.length];
+  return `<span class="avatar" aria-hidden="true" style="background:${bg};color:${c}">${esc((j.titre[0] || "?").toUpperCase())}</span>`;
+};
 // Jours depuis le dernier contact de l'éditeur (proxy du « sans réponse depuis »).
 const joursDemande = (je) => { const ed = jeux.get(je.jeu_id).editeur_id; const d = ed ? edStatut.get(ed)?.dernier_contact : null; return d ? Math.round((Date.now() - new Date(d + "T00:00:00").getTime()) / 86400000) : null; };
 const editeurDe = (je) => { const ed = jeux.get(je.jeu_id).editeur_id; return ed && !(je.notes || "").includes(`Refusé par ${orgNom(ed)}`) ? ed : ""; };
