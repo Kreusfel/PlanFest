@@ -55,7 +55,7 @@ const bggEditeurs = new Map();                 // jeu_id → éditeurs proposés
 let tab = "festival", mode = "list", ficheId = null;
 let filt = { q: "", origine: "", prov: "", usage: "", categorie: "", editeur: "", sansAnim: false };
 let ludoQ = "", ludoNonDecides = false;
-let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "", upcVotes: {} };  // ean : code-barre inconnu à associer ; upcVotes : liens de vote gameupc par numéro BGG
+let ajout = { q: "", asso: false, prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "", upcStatus: null };  // ean : code-barre inconnu à associer ; upcStatus : statut du lookup gameupc (verified = pas de vote retour)
 let csvMsg = "";
 
 const canWrite = () => isAdmin() || hasPole("jeux_editeurs");
@@ -666,7 +666,7 @@ async function onClick(e) {
     if (mode === "tri") { await load(); tab = "ludo"; }  // le tri a pu changer la sélection
     mode = "list"; return go();
   }
-  if (t.closest("#ajouter")) { ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "", upcVotes: {} }; mode = "ajout"; return go(); }
+  if (t.closest("#ajouter")) { ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: "", prov: "don", detail: "", upcStatus: null }; mode = "ajout"; return go(); }
   if (t.closest("#to-manuel")) { mode = "manuel"; return go(); }
   if (t.closest("#to-ajout")) { mode = "ajout"; return go(); }
   if (t.closest("#to-csv") || t.closest("#l-csv")) { csvMsg = ""; mode = "csv"; return go(); }
@@ -776,24 +776,24 @@ async function scanner(v) {
   if (code.length < 6) { toast("Code-barre trop court."); return; }
   const j = parEan(code);
   if (j) { ficheId = j.id; mode = "fiche"; window.scrollTo(0, 0); go(); if (!sel.has(j.id)) toast(`« ${j.titre} » : pas encore au festival.`, "warn"); return; }
-  if (mode !== "ajout") ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: code, prov: "don", detail: "", upcVotes: {} };
-  else { ajout.ean = code; ajout.upcVotes = {}; }
+  if (mode !== "ajout") ajout = { q: "", asso: tab === "ludo", prendre: true, bgg: null, msg: "", ean: code, prov: "don", detail: "", upcStatus: null };
+  else { ajout.ean = code; ajout.upcStatus = null; }
   mode = "ajout"; go();
   await chercherParCode(code);
 }
 // Demande à gameupc le(s) jeu(x) correspondant à un code inconnu, puis lit leur fiche sur BGG
-// pour les présenter (un tap = « C'est ce jeu »). On mémorise le lien de vote par numéro BGG :
-// si l'utilisateur confirme une de ces suggestions, le choix est renvoyé à gameupc (memoriserEan).
+// pour les présenter (un tap = « C'est ce jeu »). On retient le statut du lookup : si le code
+// n'était pas déjà « verified », le jeu confirmé est renvoyé à gameupc (voir memoriserEan).
 async function chercherParCode(code) {
-  ajout.upcVotes = {};
+  ajout.upcStatus = null;
   dire("Recherche du code sur gameupc…");
   const { data, error } = await supa.functions.invoke("gameupc", { body: { action: "lookup", upc: code } });
+  ajout.upcStatus = data?.status ?? null;
   if (error || data?.error || !data?.suggestions?.length) {
     ajout.bgg = null;
     ajout.msg = "Code inconnu de gameupc : cherche le jeu par son nom ci-dessous.";
     go(); root.querySelector("#a-q")?.focus(); return;
   }
-  (data.suggestions || []).forEach((s) => { if (s.bgg_id && s.update_url) ajout.upcVotes[s.bgg_id] = s.update_url; });
   dire("Lecture des fiches BGG…");
   const fiches = (await Promise.all(data.suggestions.slice(0, 8).map((s) => lireBgg(s.bgg_id)))).filter(Boolean);
   ajout.bgg = fiches;
@@ -803,12 +803,15 @@ async function chercherParCode(code) {
 }
 async function memoriserEan(j) {
   if (!j || !ajout.ean || j.ean) return;
-  const { error } = await supa.from("jeux").update({ ean: ajout.ean }).eq("id", j.id);
+  const code = ajout.ean;
+  const { error } = await supa.from("jeux").update({ ean: code }).eq("id", j.id);
   if (error) { toast(error.code === "23505" ? "Ce code-barre est déjà associé à un autre jeu." : "Code-barre non enregistré : " + error.message); return; }
-  j.ean = ajout.ean;
-  // Le jeu confirmé venait d'une suggestion gameupc : on renvoie le choix (best-effort, sans bloquer).
-  const vote = j.bgg_id && ajout.upcVotes && ajout.upcVotes[j.bgg_id];
-  if (vote) supa.functions.invoke("gameupc", { body: { action: "vote", update_url: vote } }).catch(() => {});
+  j.ean = code;
+  // Crowdsourcing gameupc : sauf si le code était déjà « verified », on renvoie le mapping
+  // code → numéro BGG choisi (couvre « suggestions » et « code inconnu »), best-effort.
+  if (j.bgg_id && ajout.upcStatus !== "verified") {
+    supa.functions.invoke("gameupc", { body: { action: "vote", upc: code, bgg_id: j.bgg_id } }).catch(() => {});
+  }
   ajout.ean = "";
 }
 

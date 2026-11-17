@@ -1,8 +1,10 @@
 // Edge Function gameupc — proxy vers l'API gameupc.com (code-barre UPC d'un jeu → numéro
 // BoardGameGeek), réservé aux comptes actifs. Actions :
-//   { action:"lookup", upc }        → { status, searched_for, suggestions:[{bgg_id,name,update_url}] }
-//   { action:"vote",   update_url } → { status, suggestions } (renvoie le choix de l'utilisateur
-//                                      à gameupc : ~2 votes concordants valident un code → jeu)
+//   { action:"lookup", upc }         → { status, searched_for, suggestions:[{bgg_id,name}] }
+//   { action:"vote", upc, bgg_id }   → { status, suggestions } (renvoie le choix de l'utilisateur
+//                                       à gameupc : ~2 votes concordants valident un code → jeu.
+//                                       Crowdsourcing demandé par gameupc pour les codes mal/non
+//                                       reconnus — endpoint /upc/{upc}/bgg_id/{bgg_id})
 // Clé d'API : secret Supabase GAMEUPC_KEY (Edge Functions → Secrets). SANS secret, on tombe en
 // mode TEST (endpoint /test/ + clé de démo) : seuls les UPC de test de gameupc répondent. Dès que
 // la vraie clé est posée en secret, on passe en prod sans toucher au code. La clé reste côté
@@ -18,16 +20,17 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// Mode prod si la clé réelle est fournie en secret, sinon mode test (clé de démo publique).
+// Mode prod si la clé réelle est fournie en secret (endpoint /v1 = données de production),
+// sinon mode test (endpoint /test + clé de démo publique, seuls les UPC de test répondent).
 const KEY = Deno.env.get("GAMEUPC_KEY");
-const BASE = KEY ? "https://api.gameupc.com" : "https://api.gameupc.com/test";
+const BASE = KEY ? "https://api.gameupc.com/v1" : "https://api.gameupc.com/test";
 const apiHeaders: Record<string, string> = { "x-api-key": KEY || "test_test_test_test_test" };
 
 // gameupc renvoie une liste bgg_info ; on n'en garde que l'essentiel pour le navigateur.
 function suggestions(data: any) {
   return (data?.bgg_info ?? [])
     .filter((x: any) => x && x.id)
-    .map((x: any) => ({ bgg_id: +x.id, name: x.name ?? "", update_url: x.update_url ?? null }));
+    .map((x: any) => ({ bgg_id: +x.id, name: x.name ?? "" }));
 }
 
 Deno.serve(async (req) => {
@@ -42,7 +45,7 @@ Deno.serve(async (req) => {
     const { data: actif } = await asUser.rpc("est_actif");
     if (actif !== true) return json({ error: "Compte inactif." }, 403);
 
-    const { action, upc, update_url } = await req.json();
+    const { action, upc, bgg_id } = await req.json();
 
     if (action === "lookup") {
       const code = String(upc ?? "").replace(/\D/g, "");
@@ -58,22 +61,19 @@ Deno.serve(async (req) => {
     }
 
     if (action === "vote") {
-      // On ne POST que vers gameupc.com en https (l'update_url vient d'une réponse lookup
-      // précédente, relayée par le client) : garde-fou anti-SSRF.
-      let ok = false;
-      try {
-        const u2 = new URL(String(update_url));
-        ok = u2.protocol === "https:" && /(^|\.)gameupc\.com$/i.test(u2.hostname);
-      } catch { /* url invalide */ }
-      if (!ok) return json({ error: "URL de vote invalide." }, 400);
+      // On construit l'URL nous-mêmes à partir de (upc, bgg_id) validés en chiffres : pas de
+      // destination arbitraire fournie par le client (anti-SSRF), et endpoint canonique gameupc.
+      const code = String(upc ?? "").replace(/\D/g, "");
+      const bid = String(bgg_id ?? "").replace(/\D/g, "");
+      if (code.length < 6 || !bid) return json({ error: "Vote invalide." }, 400);
       // Identifiant stable et anonyme (prévention du bruit côté gameupc) = l'utilisateur connecté.
-      const r = await fetch(String(update_url), {
+      const r = await fetch(`${BASE}/upc/${code}/bgg_id/${bid}`, {
         method: "POST",
         headers: { ...apiHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: `planfest-${u.user.id}` }),
       });
       if (!r.ok) return json({ error: `vote refusé (${r.status}).` }, 502);
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       return json({ status: data?.bgg_info_status ?? null, suggestions: suggestions(data) });
     }
 
