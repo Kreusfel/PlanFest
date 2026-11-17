@@ -86,8 +86,13 @@ Pour que les liens des e-mails (invitation, mot de passe) reviennent en local, a
    - `inviter` : envoie les e-mails d'invitation (utilise la clé service_role, fournie
      automatiquement par Supabase à la fonction) ;
    - `bgg-import` : recherche de jeux sur BoardGameGeek, réservée aux comptes actifs.
+   - `gameupc` : résout un code-barre (UPC) en numéro BGG via gameupc.com, réservée aux
+     comptes actifs. Sans le secret `GAMEUPC_KEY`, elle tourne en **mode test** (seuls les
+     UPC de démo de gameupc répondent) ; dès que la vraie clé est posée en secret, elle
+     passe en prod sans changer le code.
 3. **Secrets** (Edge Functions → Secrets) : `BGG_TOKEN` = jeton d'application BGG
-   (géré sur boardgamegeek.com/applications ; un jeton peut expirer).
+   (géré sur boardgamegeek.com/applications ; un jeton peut expirer). `GAMEUPC_KEY` = clé
+   d'API gameupc.com (optionnelle tant qu'on teste ; absente = mode test).
 4. **Authentication** :
    - Sign In / Providers : **désactiver « Allow new users to sign up »** ; laisser
      « Confirm email » activé.
