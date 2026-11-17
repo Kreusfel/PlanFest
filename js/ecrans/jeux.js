@@ -269,9 +269,32 @@ function carte(je) {
     <div class="jeu-foot">${estAnimation(je) ? plur(nbAnim, "animateur", "animateurs") + " · " : ""}${tbl}</div>
   </div>`;
 }
+// Une ligne de la table « Jeux de l'édition » (format maquette). Le placement/animateur ne
+// sont plus affichés ici (filtre « sans animateur » + plan des salles) ; focus catalogue.
+function ligneFestival(je) {
+  const j = jeux.get(je.jeu_id); if (!j) return "";
+  const img = j.miniature_url || j.image_url;
+  const joueurs = j.joueurs_min ? `${j.joueurs_min}${j.joueurs_max && j.joueurs_max !== j.joueurs_min ? "–" + j.joueurs_max : ""}` : "—";
+  const duree = j.duree_min ? `${j.duree_min} min` : "—";
+  const age = j.age_min ? `${j.age_min}+` : "—";
+  const statut = j.ludotheque ? `<span class="pill blue">Ludothèque</span>`
+    : `<span class="pill ${STATUT_PILL[je.statut] || "grey"}">${esc(etiquetteObtenir(je))}</span>`;
+  const dest = (je.usages || []).map((u) => `<span class="pill grey">${esc(usageLbl(u))}</span>`);
+  if (mallesDe(j.id).length) dest.push(`<span class="pill grey">Malles</span>`);
+  const ex = manque(j) ? `<span class="alert-txt">${possedes(j)}/${besoin(j)} · manque ${manque(j)}</span>`
+    : j.ludotheque ? String(possedes(j)) : "—";
+  return `<tr class="clk" data-open="${j.id}">
+    <td><div class="ludo-cell"><span class="ludo-thumb">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</span>
+      <span><b>${esc(j.titre)}</b>${j.annee ? ` <span class="muted">${j.annee}</span>` : ""}</span></div></td>
+    <td class="muted">${joueurs}</td><td class="muted">${duree}</td><td class="muted">${age}</td>
+    <td class="muted">${j.editeur_id ? esc(orgNom(j.editeur_id)) : "—"}</td>
+    <td>${statut}</td>
+    <td>${dest.length ? dest.join(" ") : `<span class="muted">—</span>`}</td>
+    <td>${ex}</td></tr>`;
+}
 function festivalView() {
-  const grid = festivalFiltres().map(carte).join("")
-    || `<p class="muted">${loadErr ? "Erreur : " + esc(loadErr) : sel.size ? "Aucun jeu pour ces filtres." : "Aucun jeu pour ce festival. Trie la ludothèque ou ajoute un jeu à obtenir."}</p>`;
+  const rows = festivalFiltres().map(ligneFestival).join("")
+    || `<tr><td colspan="8" class="muted">${loadErr ? "Erreur : " + esc(loadErr) : sel.size ? "Aucun jeu pour ces filtres." : "Aucun jeu pour ce festival. Trie la ludothèque ou ajoute un jeu à obtenir."}</td></tr>`;
   const nsa = [...sel.values()].filter(sansAnimateur).length;
   const opt = (v, cur, l) => `<option value="${v}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
   const eIds = [...new Set([...sel.values()].map((r) => jeux.get(r.jeu_id)?.editeur_id).filter(Boolean))];
@@ -285,7 +308,9 @@ function festivalView() {
       <select id="f-editeur" aria-label="Éditeur">${opt("", filt.editeur, "Tous éditeurs")}${eIds.map((id) => opt(id, filt.editeur, orgNom(id))).join("")}</select>
       <button class="btn small${filt.sansAnim ? " primary" : ""}" id="f-sansanim">Sans animateur (${nsa})</button>
     </div>
-    <div class="jeux-grid">${grid}</div>
+    <div class="scroll"><table class="data-table">
+      <thead><tr><th>Jeu</th><th>Joueurs</th><th>Durée</th><th>Âge</th><th>Éditeur</th><th>Statut</th><th>Destination</th><th>Ex.</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
     ${BGG}</div>`;
 }
 
