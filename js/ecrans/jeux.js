@@ -500,16 +500,15 @@ function obtenirView() {
       <td style="text-align:right"><button class="btn small" data-bon="${esc(k)}">Bon de restitution</button></td></tr>`).join("")}
     </tbody></table></div></section>` : "";
 
-  // Listes par destination : vue d'ensemble de TOUS les jeux par usage (pas seulement ce qui
-  // manque). Le « manque » est juste signalé en bout de ligne quand il y en a.
-  const parDest = (dest) => [...jeux.values()].filter((j) => destinationsDe(j).has(dest)).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+  // Listes par destination : uniquement ce qui reste À OBTENIR (manque d'exemplaires) pour chaque
+  // usage. Un jeu possédé en quantité suffisante (Azul) n'apparaît donc nulle part sur cet écran.
   const listeDest = (titre, dest) => {
-    const items = parDest(dest);
+    const items = [...jeux.values()].filter((j) => manque(j) > 0 && destinationsDe(j).has(dest)).sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
     if (!items.length) return "";
-    return `<section class="card" style="margin-top:16px"><div class="dash-panel-head"><h2>${esc(titre)} <span class="pill grey">${items.length}</span></h2></div>
+    return `<section class="card" style="margin-top:16px"><div class="dash-panel-head"><h2>${esc(titre)} <span class="pill alert">${items.length}</span></h2></div>
       <div class="list">${items.map((j) => `<div class="row">${avatarJeu(j)}<div class="row-main">
         <b class="kan-card-name clk" data-open="${j.id}">${esc(j.titre)}</b>
-        <span class="muted">${esc(usageTexte(j))}${manque(j) ? ` · <span class="alert-txt">manque ${manque(j)}</span>` : ""}</span></div></div>`).join("")}</div></section>`;
+        <span class="muted"><span class="alert-txt">manque ${manque(j)}</span> · ${possedes(j)}/${besoin(j)} · ${esc(usageTexte(j))}</span></div></div>`).join("")}</div></section>`;
   };
   const dests = listeDest("Pour les malles", "malle")
     + listeDest("Pour l'animation", "animation")
