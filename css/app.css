@@ -355,6 +355,7 @@ input[type=color]{padding:3px;height:44px}
 /* ---------- v2 : composants de refonte ---------- */
 .grid{display:grid;gap:16px}
 .g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 .g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .kpi .v{display:block;font-size:30px;font-weight:700;line-height:1;margin-bottom:3px}
 .bar{height:8px;background:var(--soft);border-radius:4px;overflow:hidden}
