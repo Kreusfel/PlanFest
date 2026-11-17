@@ -108,16 +108,16 @@ a{color:var(--primary)}
 .pill.grey{background:var(--neutral-tint);color:var(--neutral)}
 
 /* ---------- Boutons ---------- */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;min-height:44px;padding:10px 16px;
-  font-weight:600;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px}
-.btn:hover{border-color:#111;background:var(--soft)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;min-height:44px;padding:0 18px;
+  font-weight:700;font-size:15px;color:var(--ink);background:var(--surface);border:2px solid var(--ink);border-radius:12px}
+.btn:hover{background:var(--soft)}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
 .btn.primary:hover{background:#0A4747;border-color:#0A4747}
 .btn.ghost{background:transparent;border-color:transparent;color:inherit}
 .btn.ghost:hover{background:rgba(0,0,0,.05)}
 .btn.danger{color:var(--alert);border-color:var(--alert)}
 .btn.danger:hover{background:var(--alert-bg)}
-.btn.small{min-height:38px;padding:8px 12px;font-size:13px}
+.btn.small{min-height:36px;padding:0 14px;font-size:13.5px}
 .btn.block{width:100%}
 /* Désactivé : visiblement inactif (avant, identique à un bouton actif). */
 .btn:disabled,.btn[disabled],.niv:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
@@ -429,8 +429,8 @@ input[type=color]{padding:3px;height:44px}
 .filters label{margin-bottom:0}
 .filters .grow{flex:1 1 240px}
 .data-table{border-collapse:collapse;width:100%;font-size:14px}
-.data-table th{text-align:left;padding:8px;color:var(--muted);font-weight:600;font-size:12px;border-bottom:1px solid var(--line);white-space:nowrap}
-.data-table td{padding:12px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.data-table th{text-align:left;padding:10px 12px;color:var(--muted);font-weight:700;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;background:var(--bg);border-bottom:1.5px solid var(--line);white-space:nowrap}
+.data-table td{padding:10px 12px;font-size:14.5px;border-bottom:1px solid var(--line);vertical-align:middle}
 .data-table tr:last-child td{border-bottom:0}
 .data-table tr.hl td{background:#F0FDF4}
 .data-table tr.clk{cursor:pointer}
@@ -439,8 +439,8 @@ input[type=color]{padding:3px;height:44px}
 .data-table .group-row td{background:var(--soft);font:600 12px var(--font);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:8px 8px}
 .data-table .group-row.alert td{background:var(--alert-bg);color:var(--alert)}
 .alert-txt{color:var(--alert);font-weight:600}
-.utabs{display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap;margin-bottom:12px}
-.utabs a,.utabs button{padding:10px 14px;color:var(--muted);text-decoration:none;font-weight:600;border:0;background:none;cursor:pointer;border-bottom:2px solid transparent;min-height:auto}
+.utabs{display:flex;gap:18px;border-bottom:1.5px solid var(--line);flex-wrap:wrap;margin-bottom:20px}
+.utabs a,.utabs button{display:inline-flex;align-items:center;gap:8px;padding:0 2px;min-height:48px;color:var(--muted);text-decoration:none;font-weight:700;font-size:18px;border:0;background:none;cursor:pointer;border-bottom:4px solid transparent}
 .utabs a.on,.utabs button.on{color:var(--primary);border-color:var(--primary)}
 .two{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
 .two>.l{flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:16px}
