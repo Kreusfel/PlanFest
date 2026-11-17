@@ -343,6 +343,11 @@ input[type=color]{padding:3px;height:44px}
 .kan-obtenu{margin-top:10px;padding:10px;border-radius:12px;background:var(--bg);border:1.5px solid var(--ink)}
 .kan-obtenu-q{font-size:13px;font-weight:700;margin-bottom:8px}
 .kan-obtenu-btns{display:flex;gap:6px;flex-wrap:wrap}
+/* ---------- Ajouter un jeu : 3 colonnes (maquette) ---------- */
+.ajout-cols{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.ajout-methodes{flex:1 1 240px;min-width:220px;display:flex;flex-direction:column;gap:10px}
+.ajout-res{flex:2 1 320px;min-width:260px}
+.ajout-ou{flex:1 1 220px;min-width:200px;background:var(--bg);border:1.5px solid var(--line);border-radius:14px;padding:14px}
 
 /* ---------- Compétences ---------- */
 .comp-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:7px 0;border-bottom:1px solid var(--line)}

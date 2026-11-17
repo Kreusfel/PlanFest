@@ -528,26 +528,31 @@ function ajoutView() {
         <div class="actions"><button class="btn small primary" data-bgg="${ajout.bgg.indexOf(r)}">Ajouter</button></div></div>`).join("")}</div>`
       : `<p class="muted">Rien de plus sur BGG.</p>`);
   })();
-  return `<div class="page-head"><div><h1>Ajouter un jeu</h1><div class="sub">On cherche d'abord dans nos jeux, puis sur BGG</div></div>
+  const res = `${loc}${bgg}` || `<p class="muted">Scanne un code-barre ou cherche un nom pour voir des résultats.</p>`;
+  return `<div class="page-head"><div><h1>Ajouter un jeu</h1><div class="sub">On cherche d'abord dans nos jeux, puis sur BoardGameGeek</div></div>
     <div class="head-actions"><button class="btn" id="retour">← Jeux</button></div></div>
-    <div class="card" style="max-width:820px">
-      ${origineChoix("a")}
-      <form id="scan-form" class="jeux-filters">
-        <input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre (douchette ou clavier)" value="${esc(ajout.ean)}" aria-label="Code-barre">
-        ${scanDisponible() ? `<button class="btn" type="button" data-scan-cam aria-label="Scanner avec la caméra">📷 Scanner</button>` : ""}
-        <button class="btn" type="submit">Chercher le code</button>
-      </form>
-      ${ajout.ean ? `<p class="sync-warn">Code ${esc(ajout.ean)} : il sera enregistré avec le jeu que tu choisis ci-dessous.</p>` : ""}
-      <form id="a-form" class="jeux-filters">
-        <input id="a-q" placeholder="Nom du jeu, ou lien BGG collé…" value="${esc(ajout.q)}" aria-label="Nom du jeu ou lien BGG" autocomplete="off">
-        <button class="btn primary" type="submit">Chercher sur BGG</button>
-      </form>
-      <p class="msg" id="a-msg">${esc(ajout.msg)}</p>
-      <div id="a-res">${loc}${bgg}</div>
-      <hr>
-      <div class="filters"><span class="mini">Introuvable ?</span>
-        <button class="btn small" id="to-manuel">Saisir à la main</button>
-        <button class="btn small" id="to-csv">Import CSV (ludothèque)</button></div>
+    <div class="card">
+      <div class="ajout-cols">
+        <div class="ajout-methodes">
+          <div class="lbl">Comment l'ajouter ?</div>
+          <form id="scan-form" class="jeux-filters">
+            <input id="scan" inputmode="numeric" autocomplete="off" placeholder="Code-barre (douchette ou clavier)" value="${esc(ajout.ean)}" aria-label="Code-barre">
+            ${scanDisponible() ? `<button class="btn" type="button" data-scan-cam aria-label="Scanner avec la caméra">📷 Scanner</button>` : ""}
+            <button class="btn" type="submit">Chercher le code</button>
+          </form>
+          ${ajout.ean ? `<p class="sync-warn">Code ${esc(ajout.ean)} : il sera enregistré avec le jeu que tu choisis.</p>` : ""}
+          <form id="a-form" class="jeux-filters">
+            <input id="a-q" placeholder="Nom du jeu, ou lien BGG collé…" value="${esc(ajout.q)}" aria-label="Nom du jeu ou lien BGG" autocomplete="off">
+            <button class="btn primary" type="submit">Chercher sur BGG</button>
+          </form>
+          <p class="mini">Introuvable ?</p>
+          <div class="filters">
+            <button class="btn small" id="to-manuel">Saisir à la main</button>
+            <button class="btn small" id="to-csv">Import CSV (ludothèque)</button></div>
+        </div>
+        <div class="ajout-res"><p class="msg" id="a-msg">${esc(ajout.msg)}</p><div id="a-res">${res}</div></div>
+        <div class="ajout-ou"><div class="lbl">Où l'ajouter ?</div>${origineChoix("a")}</div>
+      </div>
       ${BGG}</div>`;
 }
 // Choix « jeu de l'asso / jeu à obtenir » (+ « le prendre pour ce festival », ou provenance), commun à
